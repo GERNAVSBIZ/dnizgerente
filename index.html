@@ -224,9 +224,26 @@
                         </div>
                     </div>
 
-                    <!-- Turnos Operacionais: ALFA, BRAVO, CHARLIE + ADM/Sobreaviso -->
+                    <!-- Turnos Operacionais: ALFA, BRAVO, CHARLIE -->
                     <div id="shiftsContainer" class="space-y-3">
                         <div class="py-12 text-center text-sm text-mut">Carregando operadores do dia...</div>
+                    </div>
+
+                    <!-- Solicitações de Alteração de Horário AFIS (Prorrogação / Antecipação) do Dia -->
+                    <div id="scheduleAlteracoesBox" class="mt-4 pt-4 border-t border-std">
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="text-[11px] font-bold uppercase tracking-wider text-amber-500 flex items-center gap-1.5">
+                                <i class="fas fa-clock-rotate-left text-[10px]"></i>
+                                <span>Solicitações de Alteração de Horário (Prorrogação / Antecipação)</span>
+                                <span id="alteracoesCountBadge" class="hidden px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 font-mono text-[10px]">0</span>
+                            </div>
+                            <a href="https://altercaohorario.vercel.app/admin" target="_blank" class="text-[11px] font-medium text-sky-500 hover:underline">
+                                Abrir Painel ADM <i class="fas fa-arrow-up-right-from-square text-[9px] ml-0.5"></i>
+                            </a>
+                        </div>
+                        <div id="alteracoesListContainer" class="space-y-2 text-xs">
+                            <div class="text-mut italic">Verificando solicitações do dia...</div>
+                        </div>
                     </div>
                 </div>
 
@@ -537,8 +554,20 @@
             appId: "1:451393122794:web:24f125f11ef3260b770293"
         };
 
+        const firebaseConfigAlteracao = {
+            apiKey: "AIzaSyBrvJdlpzIE25rzdFR5ZZzftCIBEhWmW0g",
+            authDomain: "sbiz-navmanager.firebaseapp.com",
+            projectId: "sbiz-navmanager",
+            storageBucket: "sbiz-navmanager.firebasestorage.app",
+            messagingSenderId: "1041766921768",
+            appId: "1:1041766921768:web:bd372feea172476bd1a71d"
+        };
+
         const dbNovo = getFirestore(initializeApp(firebaseConfigNovo, "escalaNovo"));
         const dbOriginal = getFirestore(initializeApp(firebaseConfigOriginal, "escalaOriginal"));
+        const dbAlteracao = getFirestore(initializeApp(firebaseConfigAlteracao, "alteracaoHorario"));
+
+        let alteracaoRequestsList = [];
 
         const SHIFT_CONFIG = {
             'A':   { name: 'ALFA',        category: 'main' },
@@ -924,6 +953,136 @@
                 `).join('');
             } else {
                 offBox.innerHTML = `<span class="text-mut italic">Nenhum operador de folga</span>`;
+            }
+
+            renderAlteracoesOfTheDay();
+        }
+
+        function getAlteracaoStatusMeta(req) {
+            const st = req.status || 'pending_confirmation';
+            const appSt = req.approvalStatus || 'waiting_confirmation';
+
+            if (appSt === 'cancelled' || st === 'cancelled') {
+                return {
+                    label: 'Cancelada',
+                    badgeClass: 'bg-slate-500/15 text-slate-400 border-slate-500/30',
+                    borderClass: 'border-l-slate-500'
+                };
+            }
+            // STATUS 1: Solicitação inicial e pendente de confirmação do solicitante
+            if (st !== 'confirmed') {
+                return {
+                    label: '1 • Pendente Confirmação (Solicitante)',
+                    badgeClass: 'bg-amber-500/15 text-amber-400 border-amber-500/35',
+                    borderClass: 'border-l-amber-500'
+                };
+            }
+            // STATUS 3: Autorizado ou Recusado pela Administração
+            if (appSt === 'authorized') {
+                return {
+                    label: '3 • Autorizado (ADM)',
+                    badgeClass: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/35',
+                    borderClass: 'border-l-emerald-500'
+                };
+            }
+            if (appSt === 'not_authorized') {
+                return {
+                    label: '3 • Recusado (ADM)',
+                    badgeClass: 'bg-rose-500/15 text-rose-400 border-rose-500/35',
+                    borderClass: 'border-l-rose-500'
+                };
+            }
+            // STATUS 2: Confirmado pelo solicitante (aguardando decisão da ADM)
+            return {
+                label: '2 • Confirmado pelo Solicitante (Aguardando ADM)',
+                badgeClass: 'bg-sky-500/20 text-sky-400 border-sky-500/40 animate-pulse',
+                borderClass: 'border-l-sky-500'
+            };
+        }
+
+        function renderAlteracoesOfTheDay() {
+            const listEl = document.getElementById('alteracoesListContainer');
+            const badgeEl = document.getElementById('alteracoesCountBadge');
+            if (!listEl) return;
+
+            const d = escalaState.selectedDate;
+            const pad = n => String(n).padStart(2, '0');
+            const targetDateStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+            const dayRequests = alteracaoRequestsList.filter(req => {
+                if (!req.period?.start) return false;
+                const startObj = new Date(req.period.start);
+                const endObj = req.period?.end ? new Date(req.period.end) : startObj;
+                if (isNaN(startObj.getTime())) return false;
+
+                const startDateStr = startObj.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+                const endDateStr = !isNaN(endObj.getTime())
+                    ? endObj.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+                    : startDateStr;
+
+                return startDateStr === targetDateStr || endDateStr === targetDateStr;
+            });
+
+            if (dayRequests.length === 0) {
+                badgeEl.classList.add('hidden');
+                listEl.innerHTML = `<div class="sub-panel px-3 py-2 text-mut italic">Nenhuma solicitação de prorrogação ou antecipação para este dia.</div>`;
+                return;
+            }
+
+            badgeEl.textContent = String(dayRequests.length);
+            badgeEl.classList.remove('hidden');
+
+            listEl.innerHTML = dayRequests.map(req => {
+                const meta = getAlteracaoStatusMeta(req);
+                const startObj = new Date(req.period.start);
+                const endObj = req.period?.end ? new Date(req.period.end) : null;
+                const startTime = !isNaN(startObj.getTime())
+                    ? startObj.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })
+                    : '--:--';
+                const endTime = endObj && !isNaN(endObj.getTime())
+                    ? endObj.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })
+                    : '--:--';
+
+                const startHourLocal = !isNaN(startObj.getTime())
+                    ? parseInt(startObj.toLocaleTimeString('en-GB', { timeZone: 'America/Sao_Paulo', hour: '2-digit' }), 10)
+                    : 18;
+                const tipoAlteracao = startHourLocal < 6 ? 'Antecipação' : 'Prorrogação';
+
+                const prefixo = req.aircraft?.registration || req.aircraft?.typeQty || 'Aeronave';
+                const empresa = req.company?.name || req.requestor?.name || 'Solicitante';
+
+                return `
+                    <a href="https://altercaohorario.vercel.app/admin" target="_blank" class="sub-panel border-l-4 ${meta.borderClass} px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2 hover:opacity-90 transition block">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="font-mono font-bold text-xs px-2 py-0.5 rounded border border-std" style="background-color: var(--bg-surface);">
+                                ${prefixo}
+                            </span>
+                            <span class="font-semibold text-xs">${empresa}</span>
+                            <span class="text-[11px] font-mono text-sec">• ${tipoAlteracao}: <strong>${startTime} às ${endTime}</strong></span>
+                        </div>
+                        <span class="px-2 py-0.5 rounded border text-[11px] font-bold ${meta.badgeClass}">
+                            ${meta.label}
+                        </span>
+                    </a>
+                `;
+            }).join('');
+        }
+
+        function subscribeAlteracaoHorarioRequests() {
+            try {
+                onSnapshot(collection(dbAlteracao, "requests"), (snap) => {
+                    const list = [];
+                    snap.forEach(docSnap => {
+                        list.push({ id: docSnap.id, ...docSnap.data() });
+                    });
+                    list.sort((a, b) => new Date(b.period?.start || b.createdAt || 0) - new Date(a.period?.start || a.createdAt || 0));
+                    alteracaoRequestsList = list;
+                    renderAlteracoesOfTheDay();
+                }, () => {
+                    renderAlteracoesOfTheDay();
+                });
+            } catch (e) {
+                renderAlteracoesOfTheDay();
             }
         }
 
@@ -1836,6 +1995,7 @@
             setInterval(calculateMetarAge, 60000);
 
             loadAllSchedulesFromFirebase();
+            subscribeAlteracaoHorarioRequests();
             renderHubCategories();
             renderHubSystems();
         }
