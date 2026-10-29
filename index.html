@@ -1,0 +1,1813 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal Gerente DNIZ — Painel Operacional (SBIZ)</title>
+    <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/3652/3652191.png">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        :root {
+            --bg-page: #0a101d;
+            --bg-surface: #111a2e;
+            --bg-elevated: #17233b;
+            --border-color: #233252;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+        }
+
+        body.light-mode {
+            --bg-page: #eaf0f8;
+            --bg-surface: #f8fafd;
+            --bg-elevated: #eff4fb;
+            --border-color: #cbd5e1;
+            --text-primary: #0f172a;
+            --text-secondary: #334155;
+            --text-muted: #64748b;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-page);
+            background-image:
+                radial-gradient(at 0% 0%, rgba(14, 165, 233, 0.08) 0px, transparent 45%),
+                radial-gradient(at 100% 0%, rgba(16, 185, 129, 0.07) 0px, transparent 45%);
+            color: var(--text-primary);
+            transition: background-color 0.2s ease, color 0.2s ease;
+            overflow-x: hidden;
+        }
+
+        .panel {
+            background-color: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            box-shadow: 0 4px 20px -4px rgba(0, 0, 0, 0.18);
+        }
+
+        body.light-mode .panel {
+            box-shadow: 0 4px 16px -4px rgba(15, 23, 42, 0.06);
+        }
+
+        .sub-panel {
+            background-color: var(--bg-elevated);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+        }
+
+        .text-sec { color: var(--text-secondary); }
+        .text-mut { color: var(--text-muted); }
+        .border-std { border-color: var(--border-color); }
+
+        /* Destaque discreto para o turno atualmente em operação */
+        .shift-active {
+            border-color: rgba(16, 185, 129, 0.65) !important;
+            background: linear-gradient(90deg, rgba(16, 185, 129, 0.09) 0%, var(--bg-elevated) 100%);
+        }
+
+        /* Filetes sutis de cor por turno */
+        .shift-border-A { border-left: 4px solid #f59e0b; }
+        .shift-border-B { border-left: 4px solid #0ea5e9; }
+        .shift-border-C { border-left: 4px solid #6366f1; }
+        .shift-border-S { border-left: 4px solid #10b981; }
+
+        /* Alerta de atraso do METAR */
+        @keyframes pulseAlert {
+            0%, 100% { background-color: #dc2626; box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.6); }
+            50% { background-color: #b91c1c; box-shadow: 0 0 25px 4px rgba(220, 38, 38, 0.45); }
+        }
+        .alert-active {
+            animation: pulseAlert 1.2s infinite ease-in-out;
+        }
+
+        body.screen-alert::after {
+            content: "";
+            position: fixed;
+            inset: 0;
+            border: 4px solid #ef4444;
+            pointer-events: none;
+            z-index: 9999;
+        }
+
+        input[type="range"] {
+            accent-color: #0ea5e9;
+            cursor: pointer;
+        }
+
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.25); border-radius: 9999px; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- Aviso de queda de rede (aparece apenas se ficar sem internet) -->
+    <div id="offlineNetworkBanner" class="hidden bg-red-600 text-white text-center py-1.5 px-4 text-xs font-bold tracking-wide">
+        <i class="fas fa-wifi-slash mr-1.5"></i> SEM CONEXÃO COM A INTERNET — O monitoramento do METAR será retomado automaticamente assim que a rede voltar.
+    </div>
+
+    <!-- Aviso de desbloqueio de áudio e notificações (some no primeiro clique) -->
+    <div id="audioUnlockBanner" class="bg-amber-500/15 border-b border-amber-500/30 text-amber-300 text-center py-1.5 px-4 text-xs font-medium cursor-pointer">
+        <i class="fas fa-volume-up mr-1.5"></i> Clique em qualquer lugar da página para habilitar o som do alarme METAR e as notificações do Windows.
+    </div>
+
+    <!-- TOP BAR MINIMALISTA -->
+    <header class="border-b border-std px-6 py-3.5 sticky top-0 z-40" style="background-color: var(--bg-surface);">
+        <div class="max-w-[1750px] mx-auto flex flex-wrap items-center justify-between gap-4">
+            <!-- Título e Data -->
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2.5">
+                    <span id="networkHeaderDot" class="w-2.5 h-2.5 rounded-full bg-emerald-500" title="Conectado à rede"></span>
+                    <span class="font-bold text-base tracking-tight" id="headerTitle">PORTAL GERENTE DNIZ • SBIZ</span>
+                </div>
+                <span class="text-mut hidden sm:inline">|</span>
+                <span id="clockFullDate" class="text-sm font-medium text-sec hidden sm:inline">--</span>
+            </div>
+
+            <!-- Relógios UTC / Local + Botões Rápidos -->
+            <div class="flex items-center gap-6">
+                <div class="flex items-center gap-5 font-mono">
+                    <div class="flex items-baseline gap-2">
+                        <span class="text-[11px] font-sans font-bold uppercase tracking-wider text-amber-500">UTC</span>
+                        <span id="clockUtc" class="text-xl font-bold tracking-tight text-amber-500">00:00:00</span>
+                    </div>
+                    <span class="text-mut">•</span>
+                    <div class="flex items-baseline gap-2">
+                        <span class="text-[11px] font-sans font-bold uppercase tracking-wider text-sky-500">Local</span>
+                        <span id="clockLocal" class="text-xl font-bold tracking-tight text-sky-500">00:00:00</span>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-1.5">
+                    <button onclick="window.openFullScheduleModal()" class="h-8 px-3 rounded-lg sub-panel hover:opacity-80 text-xs font-medium flex items-center gap-1.5 transition" title="Ver tabela mensal completa da escala">
+                        <i class="fas fa-table text-sec"></i>
+                        <span class="hidden sm:inline">Escala Mês</span>
+                    </button>
+
+                    <button id="notifPermissionBtn" onclick="window.requestDesktopNotificationPermission()" class="w-8 h-8 rounded-lg sub-panel hover:opacity-80 flex items-center justify-center text-xs transition" title="Notificações do Windows para o alarme METAR">
+                        <i id="notifPermissionIcon" class="fas fa-bell text-sec"></i>
+                    </button>
+
+                    <button id="wakeLockBtn" onclick="window.toggleWakeLock()" class="w-8 h-8 rounded-lg sub-panel hover:opacity-80 flex items-center justify-center text-xs transition" title="Manter tela sempre ativa (Wake Lock)">
+                        <i id="wakeLockIcon" class="fas fa-bolt text-emerald-500"></i>
+                    </button>
+
+                    <button onclick="window.toggleTheme()" class="w-8 h-8 rounded-lg sub-panel hover:opacity-80 flex items-center justify-center text-xs transition" title="Alternar tema claro/escuro">
+                        <i id="themeIcon" class="fas fa-sun text-sec"></i>
+                    </button>
+
+                    <button onclick="window.toggleFullscreen()" class="w-8 h-8 rounded-lg sub-panel hover:opacity-80 flex items-center justify-center text-xs transition" title="Tela cheia">
+                        <i id="fullscreenIcon" class="fas fa-expand text-sec"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- CONTEÚDO PRINCIPAL -->
+    <main class="flex-grow max-w-[1750px] w-full mx-auto px-6 py-6 space-y-6">
+
+        <!-- LINHA 1: ESCALA DO DIA + MONITOR METAR -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+            <!-- ================= ESQUERDA: ESCALA DO DIA (6 COLUNAS) ================= -->
+            <section class="lg:col-span-6 panel p-6 flex flex-col justify-between">
+                <div>
+                    <!-- Cabeçalho da Escala -->
+                    <div class="flex flex-wrap items-center justify-between gap-3 pb-4 mb-5 border-b border-std">
+                        <div>
+                            <span class="text-[11px] font-bold uppercase tracking-widest text-emerald-500 block mb-0.5">Escala do Dia</span>
+                            <div class="flex items-center gap-2.5">
+                                <h2 class="text-xl font-bold tracking-tight" id="selectedDateLabel">Operadores de Hoje</h2>
+                                <span id="selectedDayTag" class="hidden px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-emerald-500/15 text-emerald-500 border border-emerald-500/30"></span>
+                            </div>
+                        </div>
+
+                        <!-- Controles discretos: Mês, CSV e Navegação de Dia -->
+                        <div class="flex flex-wrap items-center gap-1.5">
+                            <select id="scheduleMonthSelect" onchange="window.selectScheduleById(this.value)" class="h-8 px-2.5 rounded-lg sub-panel text-xs text-sec focus:outline-none max-w-[165px]" title="Selecionar escala/mês">
+                                <option value="">Carregando...</option>
+                            </select>
+
+                            <label class="h-8 px-2.5 rounded-lg sub-panel flex items-center gap-1.5 text-xs text-sec cursor-pointer hover:opacity-80 transition" title="Importar CSV local">
+                                <i class="fas fa-file-csv"></i>
+                                <span class="hidden xl:inline">CSV</span>
+                                <input type="file" accept=".csv" class="hidden" onchange="window.handleLocalCsvUpload(event)">
+                            </label>
+
+                            <button id="btnResetToday" onclick="window.resetToToday()" class="hidden h-8 px-2.5 rounded-lg sub-panel text-xs font-semibold hover:opacity-80 transition">
+                                Hoje
+                            </button>
+                            <button onclick="window.changeSelectedDay(-1)" class="w-8 h-8 rounded-lg sub-panel flex items-center justify-center hover:opacity-80 transition" title="Dia anterior">
+                                <i class="fas fa-chevron-left text-xs text-sec"></i>
+                            </button>
+                            <button onclick="window.changeSelectedDay(1)" class="w-8 h-8 rounded-lg sub-panel flex items-center justify-center hover:opacity-80 transition" title="Próximo dia">
+                                <i class="fas fa-chevron-right text-xs text-sec"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Turnos Operacionais: ALFA, BRAVO, CHARLIE + ADM/Sobreaviso -->
+                    <div id="shiftsContainer" class="space-y-3">
+                        <div class="py-12 text-center text-sm text-mut">Carregando operadores do dia...</div>
+                    </div>
+                </div>
+
+                <!-- Situação de Férias, Ausências e Folgas do Dia (Sempre visível e limpa) -->
+                <div id="leaveAndOffContainer" class="mt-5 pt-4 border-t border-std grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div class="sub-panel p-3.5">
+                        <div class="text-[11px] font-bold uppercase tracking-wider text-rose-500 mb-2 flex items-center gap-1.5">
+                            <i class="fas fa-umbrella-beach text-[10px]"></i>
+                            <span>Férias / Recesso / Licenças</span>
+                        </div>
+                        <div id="leaveListBox" class="flex flex-wrap gap-1.5 text-xs">
+                            <span class="text-mut">--</span>
+                        </div>
+                    </div>
+
+                    <div class="sub-panel p-3.5">
+                        <div class="text-[11px] font-bold uppercase tracking-wider text-sky-500 mb-2 flex items-center gap-1.5">
+                            <i class="fas fa-mug-hot text-[10px]"></i>
+                            <span>Folgas do Dia</span>
+                        </div>
+                        <div id="offListBox" class="flex flex-wrap gap-1.5 text-xs">
+                            <span class="text-mut">--</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ================= DIREITA: MONITOR METAR DA HORA (6 COLUNAS) ================= -->
+            <section class="lg:col-span-6 panel p-6 flex flex-col justify-between">
+                <div>
+                    <!-- Cabeçalho e Status do METAR -->
+                    <div class="flex flex-wrap items-center justify-between gap-3 pb-4 mb-5 border-b border-std">
+                        <div>
+                            <span class="text-[11px] font-bold uppercase tracking-widest text-sky-500 block mb-0.5">Monitor Meteorológico REDEMET</span>
+                            <h2 class="text-xl font-bold tracking-tight" id="metarHeaderTitle">METAR / SPECI — SBIZ</h2>
+                        </div>
+
+                        <div class="flex items-center gap-4 text-xs">
+                            <div class="flex items-center gap-2">
+                                <span id="statusDot" class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                <span id="statusText" class="font-medium text-sec">Iniciando...</span>
+                            </div>
+                            <span class="text-mut">|</span>
+                            <div class="font-mono text-sec">
+                                Próx. hora: <strong id="countdown" class="text-amber-500 font-bold">--:--</strong>
+                            </div>
+                            <button onclick="window.consultarMetar()" class="w-8 h-8 rounded-lg sub-panel flex items-center justify-center hover:opacity-80 transition" title="Atualizar METAR agora">
+                                <i id="refreshSpinIcon" class="fas fa-rotate text-xs text-sky-500"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- ALERTA DE ATRASO (Idêntico ao site original) -->
+                    <div id="alertPanel" class="hidden alert-active text-white p-4 rounded-xl mb-5 items-center justify-between gap-4">
+                        <div class="flex items-center gap-3">
+                            <i class="fas fa-triangle-exclamation text-xl"></i>
+                            <div>
+                                <div class="font-bold text-sm tracking-wide uppercase">
+                                    ALERTA: METAR/SPECI DA HORA NÃO ENCONTRADO!
+                                </div>
+                                <div class="text-xs opacity-90">
+                                    Verifique o envio da mensagem da hora atual na REDEMET.
+                                </div>
+                            </div>
+                        </div>
+                        <button id="silenceButton" class="px-4 py-2 rounded-lg bg-white text-red-700 font-bold text-xs uppercase tracking-wider hover:bg-red-50 transition shrink-0">
+                            Silenciar
+                        </button>
+                    </div>
+
+                    <!-- CAIXA DA MENSAGEM METAR DA HORA -->
+                    <div class="sub-panel p-5 mb-4 border-l-4 border-l-sky-500">
+                        <div class="flex items-center justify-between mb-2.5">
+                            <span id="metarHourCheckBadge" class="text-xs font-medium text-sec">Verificando...</span>
+                            <span id="metarAge" class="px-2 py-0.5 rounded bg-sky-500/15 text-sky-500 border border-sky-500/25 text-xs font-mono font-semibold"></span>
+                        </div>
+
+                        <div id="metarRaw" class="font-mono text-xl sm:text-2xl font-bold leading-relaxed tracking-wide break-words select-all">
+                            Aguardando dados...
+                        </div>
+
+                        <div class="mt-3.5 pt-2.5 border-t border-std flex flex-wrap items-center justify-between gap-2 text-xs text-mut">
+                            <span id="metarTimestamp">--</span>
+                            <span>Última verif.: <strong id="lastCheckTime" class="font-mono">--:--:--</strong> • Próx.: <strong id="nextCheckTime" class="font-mono">--:--:--</strong></span>
+                        </div>
+                    </div>
+
+                    <!-- OPÇÕES DO METAR (ICAO, Volume, Auto-Refresh e Simular Atraso) -->
+                    <div class="sub-panel p-3.5 mb-4 flex flex-wrap items-center justify-between gap-3 text-xs">
+                        <div class="flex items-center gap-2">
+                            <label for="aerodromoInput" class="font-semibold text-mut uppercase">ICAO:</label>
+                            <input type="text" id="aerodromoInput" value="SBIZ" maxlength="4" class="w-16 h-8 px-2 rounded border border-std bg-transparent text-center font-mono font-bold uppercase focus:outline-none">
+                            <button id="alterarAerodromo" class="h-8 px-3 rounded bg-sky-600 hover:bg-sky-500 text-white font-semibold transition">
+                                Alterar
+                            </button>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <span class="font-semibold text-mut uppercase">Volume:</span>
+                            <input type="range" id="volumeControl" min="0" max="1" step="0.1" value="0.7" class="w-24">
+                        </div>
+
+                        <label class="flex items-center gap-1.5 cursor-pointer select-none text-sec font-medium">
+                            <input type="checkbox" id="autoRefresh" checked class="w-4 h-4">
+                            <span>Auto (40s)</span>
+                        </label>
+
+                        <button id="simularAtrasoBtn" class="h-8 px-3 rounded-lg bg-red-600/90 hover:bg-red-600 text-white font-semibold transition">
+                            Simular Atraso (Testar Alarme)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Histórico de Mensagens METAR/SPECI -->
+                <div class="pt-3 border-t border-std">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-[11px] font-semibold uppercase tracking-wider text-mut">Histórico de Mensagens</span>
+                        <a href="https://metargeral.vercel.app/metar_relatorio.html" target="_blank" class="text-xs font-medium text-sky-500 hover:underline">
+                            Relatórios PDF <i class="fas fa-arrow-up-right-from-square text-[10px] ml-0.5"></i>
+                        </a>
+                    </div>
+                    <div id="historyContainer" class="space-y-1.5 font-mono text-xs text-sec max-h-[145px] overflow-y-auto pr-1">
+                        <div class="text-mut font-sans">Nenhum histórico disponível</div>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+
+        <!-- ================= LINHA 2: LINKS PARA OS PORTAIS E SISTEMAS OFICIAIS ================= -->
+        <section class="panel p-6">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 mb-5 border-b border-std">
+                <div>
+                    <span class="text-[11px] font-bold uppercase tracking-widest text-indigo-500 block mb-0.5">Acesso Rápido</span>
+                    <h2 class="text-base font-bold tracking-tight">Portais e Sistemas Oficiais DNIZ</h2>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2">
+                    <div id="hubCategoryTabs" class="flex flex-wrap items-center gap-1 p-1 sub-panel"></div>
+
+                    <input type="text" id="hubSearchInput" oninput="window.filterHubSystems(this.value)" placeholder="Buscar sistema..." class="h-8 px-3 rounded-lg sub-panel text-xs focus:outline-none w-44">
+
+                    <button onclick="window.openSystemModal()" class="h-8 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 transition">
+                        <i class="fas fa-plus text-[10px]"></i>
+                        <span>Adicionar Link</span>
+                    </button>
+                </div>
+            </div>
+
+            <div id="hubSystemsGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3"></div>
+        </section>
+
+    </main>
+
+    <!-- ================= MODAL: TABELA COMPLETA DO MÊS ================= -->
+    <div id="fullScheduleModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="panel w-full max-w-[95vw] max-h-[90vh] flex flex-col overflow-hidden">
+            <div class="p-4 border-b border-std flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-center gap-3">
+                    <h3 class="font-bold text-base" id="modalScheduleTitle">Escala Mensal</h3>
+                    <span id="modalOperatorSummary" class="hidden px-2.5 py-1 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-mono"></span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input type="text" id="modalOperatorSearch" oninput="window.filterModalScheduleOperator(this.value)" placeholder="Buscar ou destacar operador..." class="h-8 px-3 rounded-lg sub-panel text-xs focus:outline-none w-52">
+                    <button id="modalClearFilterBtn" onclick="window.filterModalScheduleOperator('')" class="hidden h-8 px-2.5 rounded-lg sub-panel text-xs text-sec hover:opacity-80">
+                        Limpar
+                    </button>
+                    <button onclick="window.closeFullScheduleModal()" class="w-8 h-8 rounded-lg sub-panel flex items-center justify-center">
+                        <i class="fas fa-times text-xs"></i>
+                    </button>
+                </div>
+            </div>
+            <div id="fullScheduleTableContainer" class="p-4 overflow-auto flex-grow"></div>
+        </div>
+    </div>
+
+    <!-- ================= MODAL: ADICIONAR NOVO LINK ================= -->
+    <div id="systemModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="panel w-full max-w-md p-6">
+            <div class="flex items-center justify-between pb-3 mb-4 border-b border-std">
+                <h3 class="font-bold text-base">Adicionar Novo Link</h3>
+                <button onclick="window.closeSystemModal()" class="text-sec hover:opacity-75">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="systemForm" onsubmit="window.saveSystemShortcut(event)" class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-semibold text-mut uppercase mb-1">Título do Sistema *</label>
+                    <input type="text" id="sysTitleInput" required placeholder="Ex: AISWEB, REDEMET..." class="w-full h-9 px-3 rounded-lg sub-panel focus:outline-none">
+                </div>
+                <div>
+                    <label class="block font-semibold text-mut uppercase mb-1">Endereço URL *</label>
+                    <input type="url" id="sysUrlInput" required placeholder="https://..." class="w-full h-9 px-3 rounded-lg sub-panel focus:outline-none">
+                </div>
+                <div>
+                    <label class="block font-semibold text-mut uppercase mb-1">Descrição</label>
+                    <input type="text" id="sysDescInput" placeholder="Resumo da finalidade..." class="w-full h-9 px-3 rounded-lg sub-panel focus:outline-none">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-mut uppercase mb-1">Categoria</label>
+                        <select id="sysCatInput" class="w-full h-9 px-3 rounded-lg sub-panel focus:outline-none">
+                            <option value="operacional">Operacional</option>
+                            <option value="meteorologia">Meteorologia</option>
+                            <option value="administrativo">Administrativo</option>
+                            <option value="desenvolvimento">Desenvolvimento</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-mut uppercase mb-1">Ícone</label>
+                        <select id="sysIconInput" class="w-full h-9 px-3 rounded-lg sub-panel focus:outline-none">
+                            <option value="fa-link">Link Padrão</option>
+                            <option value="fa-chart-column">Tráfego / Gráfico</option>
+                            <option value="fa-calendar-check">Escala / Calendário</option>
+                            <option value="fa-tower-observation">Torre / Pista</option>
+                            <option value="fa-cloud-sun">Meteorologia</option>
+                            <option value="fa-shield-halved">Segurança / AVSEC</option>
+                            <option value="fa-file-invoice-dollar">Cobrança / Financeiro</option>
+                            <option value="fa-bullhorn">Mural / Avisos</option>
+                            <option value="fa-robot">IA</option>
+                            <option value="fa-compass">Navegação / AIS</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="flex justify-end gap-2 pt-3 border-t border-std">
+                    <button type="button" onclick="window.closeSystemModal()" class="px-4 py-2 rounded-lg sub-panel font-semibold">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 rounded-lg bg-slate-200 text-slate-900 font-bold hover:opacity-90">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <audio id="alertSound" src="https://cdn.freesound.org/previews/250/250629_4486188-lq.mp3" preload="auto" loop></audio>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getFirestore, collection, doc, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // =========================================================================
+        // 1. RELÓGIOS E TURNOS ATIVOS (ALFA 00-08 | BRAVO 05-13 | CHARLIE 10-18)
+        // =========================================================================
+        const WEEKDAYS_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+        const WEEKDAYS_FULL = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+        const MONTHS_FULL = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+        const MONTH_MAP_IDX = { 'JANEIRO': 0, 'FEVEREIRO': 1, 'MARÇO': 2, 'ABRIL': 3, 'MAIO': 4, 'JUNHO': 5, 'JULHO': 6, 'AGOSTO': 7, 'SETEMBRO': 8, 'OUTUBRO': 9, 'NOVEMBRO': 10, 'DEZEMBRO': 11 };
+
+        let lastTrackedLocalDay = new Date().getDate();
+        let lastTrackedLocalHour = new Date().getHours();
+
+        function getActiveShiftCodes(localHour) {
+            const codes = [];
+            if (localHour >= 0 && localHour < 8) codes.push('A');
+            if (localHour >= 5 && localHour < 13) codes.push('B');
+            if (localHour >= 10 && localHour < 18) codes.push('C');
+            return codes;
+        }
+
+        function updateClocks() {
+            const now = new Date();
+            document.getElementById('clockUtc').textContent =
+                `${String(now.getUTCHours()).padStart(2, '0')}:${String(now.getUTCMinutes()).padStart(2, '0')}:${String(now.getUTCSeconds()).padStart(2, '0')}`;
+            document.getElementById('clockLocal').textContent =
+                `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+            document.getElementById('clockFullDate').textContent =
+                `${WEEKDAYS_FULL[now.getDay()]}, ${String(now.getDate()).padStart(2, '0')} de ${MONTHS_FULL[now.getMonth()]}`;
+
+            if (now.getDate() !== lastTrackedLocalDay) {
+                lastTrackedLocalDay = now.getDate();
+                lastTrackedLocalHour = now.getHours();
+                if (escalaState.isViewingToday) {
+                    escalaState.selectedDate = new Date();
+                    escalaState.selectedDate.setHours(0, 0, 0, 0);
+                    renderEscalaOfTheDay();
+                }
+            } else if (now.getHours() !== lastTrackedLocalHour) {
+                lastTrackedLocalHour = now.getHours();
+                if (escalaState.isViewingToday) {
+                    renderEscalaOfTheDay();
+                }
+            }
+        }
+        setInterval(updateClocks, 1000);
+        updateClocks();
+
+        // =========================================================================
+        // 2. ESCALA DO DIA (FIREBASE + CSV)
+        // =========================================================================
+        const firebaseConfigNovo = {
+            apiKey: "AIzaSyCjnlYviBn5MU5wQd6KsCsgfVey5Y1HqeI",
+            authDomain: "escala-operacional-novo.firebaseapp.com",
+            projectId: "escala-operacional-novo",
+            storageBucket: "escala-operacional-novo.firebasestorage.app",
+            messagingSenderId: "119979994919",
+            appId: "1:119979994919:web:ea7c32eefabdf5be048302"
+        };
+
+        const firebaseConfigOriginal = {
+            apiKey: "AIzaSyApoDIAXZ5_6GlytJp6IyesM-6epXDqo6k",
+            authDomain: "dashboard-escala.firebaseapp.com",
+            projectId: "dashboard-escala",
+            storageBucket: "dashboard-escala.appspot.com",
+            messagingSenderId: "451393122794",
+            appId: "1:451393122794:web:24f125f11ef3260b770293"
+        };
+
+        const dbNovo = getFirestore(initializeApp(firebaseConfigNovo, "escalaNovo"));
+        const dbOriginal = getFirestore(initializeApp(firebaseConfigOriginal, "escalaOriginal"));
+
+        const SHIFT_CONFIG = {
+            'A':   { name: 'ALFA',        category: 'main' },
+            'B':   { name: 'BRAVO',       category: 'main' },
+            'C':   { name: 'CHARLIE',     category: 'main' },
+            'HA':  { name: 'ADM',         category: 'support' },
+            'SE':  { name: 'Sobreaviso',  category: 'support' },
+            'VS':  { name: 'Viagem',      category: 'support' },
+            'IS':  { name: 'Insp. Saúde', category: 'support' },
+            'X':   { name: 'Folga',       category: 'off' },
+            'CHE': { name: 'Comp. Hora',  category: 'off' },
+            'FC':  { name: 'Folga Comp.', category: 'off' },
+            'FF':  { name: 'Feriado',     category: 'off' },
+            'FA':  { name: 'Ajuste',      category: 'off' },
+            'FE':  { name: 'Férias',      category: 'leave' },
+            'R':   { name: 'Recesso',     category: 'leave' },
+            'AM':  { name: 'Atestado',    category: 'leave' },
+            'LM':  { name: 'Lic. Mat.',   category: 'leave' },
+            'LP':  { name: 'Lic. Pat.',   category: 'leave' },
+            '---': { name: 'Vazio',       category: 'none' }
+        };
+
+        const escalaState = {
+            schedulesCatalog: [],
+            currentCompositeId: null,
+            currentSchedule: null,
+            selectedDate: (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; })(),
+            isViewingToday: true,
+            unsubscribeSchedule: null
+        };
+
+        function getDayStatusArray(dateHeaders) {
+            const dayStatus = [];
+            let currentStatus = 'previous';
+            for (let i = 0; i < dateHeaders.length; i++) {
+                if (i > 0 && parseInt(dateHeaders[i], 10) < parseInt(dateHeaders[i - 1], 10)) {
+                    currentStatus = currentStatus === 'previous' ? 'current' : 'next';
+                }
+                if (String(dateHeaders[i]).trim() === '1' && currentStatus === 'previous') {
+                    currentStatus = 'current';
+                }
+                dayStatus.push(currentStatus);
+            }
+            return dayStatus;
+        }
+
+        function getColumnDateObject(schedule, colIdx, dayStatuses) {
+            const dayNum = parseInt(schedule.dateHeaders[colIdx], 10);
+            let targetYear = parseInt(schedule.year, 10) || new Date().getFullYear();
+            const monthIdx = MONTH_MAP_IDX[(schedule.monthName || '').toUpperCase()] ?? new Date().getMonth();
+            let targetMonth = monthIdx;
+            const status = dayStatuses[colIdx];
+
+            if (status === 'previous') {
+                targetMonth = monthIdx - 1;
+                if (targetMonth < 0) { targetMonth = 11; targetYear--; }
+            } else if (status === 'next') {
+                targetMonth = monthIdx + 1;
+                if (targetMonth > 11) { targetMonth = 0; targetYear++; }
+            }
+            return new Date(targetYear, targetMonth, dayNum, 0, 0, 0, 0);
+        }
+
+        async function loadAllSchedulesFromFirebase() {
+            const catalog = [];
+            try {
+                const snapNovo = await getDocs(collection(dbNovo, `artifacts/${firebaseConfigNovo.projectId}/schedules`));
+                snapNovo.docs.forEach(d => {
+                    if (d.id !== 'config_units') {
+                        const data = d.data();
+                        if (!data.unitId || data.unitId === 'dniz') {
+                            catalog.push({
+                                compositeId: `novo::${d.id}`,
+                                dbKey: 'novo',
+                                docId: d.id,
+                                label: `${data.monthName || d.id} / ${data.year || ''}`,
+                                data
+                            });
+                        }
+                    }
+                });
+            } catch (e) {}
+
+            try {
+                const snapOrig = await getDocs(collection(dbOriginal, `artifacts/${firebaseConfigOriginal.projectId}/schedules`));
+                snapOrig.docs.forEach(d => {
+                    if (d.id !== 'config_units') {
+                        const data = d.data();
+                        catalog.push({
+                            compositeId: `original::${d.id}`,
+                            dbKey: 'original',
+                            docId: d.id,
+                            label: `${data.monthName || d.id} / ${data.year || ''} (Orig)`,
+                            data
+                        });
+                    }
+                });
+            } catch (e) {}
+
+            const localSaved = localStorage.getItem('portal_gerente_custom_csv_schedule');
+            if (localSaved) {
+                try {
+                    const parsed = JSON.parse(localSaved);
+                    catalog.push({
+                        compositeId: `local::csv`,
+                        dbKey: 'local',
+                        docId: 'csv',
+                        label: `${parsed.monthName} / ${parsed.year} (CSV)`,
+                        data: parsed
+                    });
+                } catch (e) {}
+            }
+
+            escalaState.schedulesCatalog = catalog;
+            const selectEl = document.getElementById('scheduleMonthSelect');
+            selectEl.innerHTML = catalog.map(item => `<option value="${item.compositeId}">${item.label}</option>`).join('');
+
+            if (catalog.length === 0) {
+                document.getElementById('shiftsContainer').innerHTML = `<div class="py-10 text-center text-sm text-mut">Nenhuma escala encontrada.</div>`;
+                return;
+            }
+
+            const targetDate = escalaState.selectedDate;
+            const targetMonthName = MONTHS_FULL[targetDate.getMonth()].toUpperCase();
+            const targetYearStr = String(targetDate.getFullYear());
+
+            const bestMatch = catalog.find(item =>
+                (item.data.monthName || '').toUpperCase() === targetMonthName &&
+                String(item.data.year) === targetYearStr
+            ) || catalog[catalog.length - 1];
+
+            window.selectScheduleById(bestMatch.compositeId);
+        }
+
+        window.selectScheduleById = function(compositeId) {
+            const found = escalaState.schedulesCatalog.find(i => i.compositeId === compositeId);
+            if (!found) return;
+
+            escalaState.currentCompositeId = compositeId;
+            escalaState.currentSchedule = found.data;
+            document.getElementById('scheduleMonthSelect').value = compositeId;
+            renderEscalaOfTheDay();
+
+            if (escalaState.unsubscribeSchedule) {
+                escalaState.unsubscribeSchedule();
+                escalaState.unsubscribeSchedule = null;
+            }
+
+            if (found.dbKey === 'novo' || found.dbKey === 'original') {
+                const dbRef = found.dbKey === 'novo' ? dbNovo : dbOriginal;
+                const projId = found.dbKey === 'novo' ? firebaseConfigNovo.projectId : firebaseConfigOriginal.projectId;
+                escalaState.unsubscribeSchedule = onSnapshot(
+                    doc(dbRef, `artifacts/${projId}/schedules`, found.docId),
+                    (docSnap) => {
+                        if (docSnap.exists()) {
+                            escalaState.currentSchedule = docSnap.data();
+                            found.data = docSnap.data();
+                            renderEscalaOfTheDay();
+                        }
+                    }
+                );
+            }
+        };
+
+        window.changeSelectedDay = function(delta) {
+            const next = new Date(escalaState.selectedDate);
+            next.setDate(next.getDate() + delta);
+            next.setHours(0, 0, 0, 0);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            escalaState.selectedDate = next;
+            escalaState.isViewingToday = (next.getTime() === today.getTime());
+            renderEscalaOfTheDay();
+        };
+
+        window.resetToToday = function() {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            escalaState.selectedDate = today;
+            escalaState.isViewingToday = true;
+            renderEscalaOfTheDay();
+        };
+
+        function renderEscalaOfTheDay() {
+            const d = escalaState.selectedDate;
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const diffDays = Math.round((d - today) / 86400000);
+
+            const dateLabel = document.getElementById('selectedDateLabel');
+            const dayTag = document.getElementById('selectedDayTag');
+            const resetBtn = document.getElementById('btnResetToday');
+
+            if (diffDays === 0) {
+                dateLabel.textContent = `Hoje, ${String(d.getDate()).padStart(2, '0')} de ${MONTHS_FULL[d.getMonth()]}`;
+                dayTag.classList.add('hidden');
+                resetBtn.classList.add('hidden');
+            } else {
+                dateLabel.textContent = `${WEEKDAYS_SHORT[d.getDay()]}, ${String(d.getDate()).padStart(2, '0')} de ${MONTHS_FULL[d.getMonth()]}`;
+                dayTag.textContent = diffDays === 1 ? 'Amanhã' : (diffDays === -1 ? 'Ontem' : `${diffDays > 0 ? '+' : ''}${diffDays}d`);
+                dayTag.classList.remove('hidden');
+                resetBtn.classList.remove('hidden');
+            }
+
+            const schedule = escalaState.currentSchedule;
+            const container = document.getElementById('shiftsContainer');
+            if (!schedule || !schedule.dateHeaders || !schedule.scheduleData) return;
+
+            const dayStatuses = getDayStatusArray(schedule.dateHeaders);
+            let targetColIdx = -1;
+            for (let i = 0; i < schedule.dateHeaders.length; i++) {
+                const colDate = getColumnDateObject(schedule, i, dayStatuses);
+                if (colDate.getTime() === d.getTime()) {
+                    targetColIdx = i;
+                    break;
+                }
+            }
+            if (targetColIdx === -1) {
+                for (let i = 0; i < schedule.dateHeaders.length; i++) {
+                    if (dayStatuses[i] === 'current' && parseInt(schedule.dateHeaders[i], 10) === d.getDate()) {
+                        targetColIdx = i;
+                        break;
+                    }
+                }
+            }
+
+            if (targetColIdx === -1) {
+                container.innerHTML = `<div class="sub-panel p-6 text-center text-sm text-sec">Data fora da escala selecionada (${schedule.monthName}/${schedule.year}).</div>`;
+                document.getElementById('leaveListBox').innerHTML = `<span class="text-mut">--</span>`;
+                document.getElementById('offListBox').innerHTML = `<span class="text-mut">--</span>`;
+                return;
+            }
+
+            const groups = { A: [], B: [], C: [], SUPPORT: [], OFF: [], LEAVE: [] };
+            schedule.scheduleData.forEach(op => {
+                const s = (op.shifts[targetColIdx] || '---').trim();
+                const cfg = SHIFT_CONFIG[s] || SHIFT_CONFIG['---'];
+                if (s === 'A') groups.A.push(op.name);
+                else if (s === 'B') groups.B.push(op.name);
+                else if (s === 'C') groups.C.push(op.name);
+                else if (cfg.category === 'support') groups.SUPPORT.push({ name: op.name, shift: s });
+                else if (cfg.category === 'off') groups.OFF.push({ name: op.name, shift: s });
+                else if (cfg.category === 'leave') groups.LEAVE.push({ name: op.name, shift: s, label: cfg.name });
+            });
+
+            const activeCodes = escalaState.isViewingToday ? getActiveShiftCodes(new Date().getHours()) : [];
+
+            const mainRows = [
+                { key: 'A', label: 'ALFA',    hours: '00:00 às 08:00', list: groups.A, labelColor: 'text-amber-500', borderClass: 'shift-border-A' },
+                { key: 'B', label: 'BRAVO',   hours: '05:00 às 13:00', list: groups.B, labelColor: 'text-sky-500',   borderClass: 'shift-border-B' },
+                { key: 'C', label: 'CHARLIE', hours: '10:00 às 18:00', list: groups.C, labelColor: 'text-indigo-500', borderClass: 'shift-border-C' }
+            ];
+
+            let html = mainRows.map(row => {
+                const isActive = activeCodes.includes(row.key);
+                return `
+                    <div class="sub-panel ${row.borderClass} p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${isActive ? 'shift-active' : ''}">
+                        <div class="sm:w-44 shrink-0">
+                            <div class="flex items-center gap-2">
+                                <span class="font-bold text-base tracking-wide ${row.labelColor}">${row.label}</span>
+                                ${isActive ? `<span class="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-500 border border-emerald-500/30 text-[10px] font-bold uppercase tracking-wider">Ativo</span>` : ''}
+                            </div>
+                            <span class="text-xs font-mono text-mut">${row.hours}</span>
+                        </div>
+
+                        <div class="flex-1 flex flex-wrap items-center gap-2 sm:justify-end">
+                            ${row.list.length > 0
+                                ? row.list.map(name => `
+                                    <button type="button" onclick="window.openFullScheduleModal('${name.replace(/'/g, "\\'")}')" title="Clique para destacar ${name} na escala mensal" class="px-3.5 py-1.5 rounded-lg border border-std hover:border-sky-500/50 font-semibold text-base sm:text-lg tracking-tight transition cursor-pointer" style="background-color: var(--bg-surface);">
+                                        ${name}
+                                    </button>
+                                `).join('')
+                                : `<span class="text-xs text-mut italic">Sem operador</span>`
+                            }
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            if (groups.SUPPORT.length > 0) {
+                html += `
+                    <div class="sub-panel shift-border-S px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+                        <span class="text-xs font-bold uppercase tracking-wider text-emerald-500">ADM / Sobreaviso</span>
+                        <div class="flex flex-wrap gap-2">
+                            ${groups.SUPPORT.map(item => `
+                                <button type="button" onclick="window.openFullScheduleModal('${item.name.replace(/'/g, "\\'")}')" title="Clique para destacar ${item.name} na escala mensal" class="px-3 py-1 rounded-lg border border-std hover:border-emerald-500/50 text-sm font-semibold transition cursor-pointer" style="background-color: var(--bg-surface);">
+                                    ${item.name} <strong class="font-mono text-xs text-emerald-500 ml-1">${item.shift}</strong>
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Visão Automática pós-18h: como o turno CHARLIE encerra às 18:00, exibe quem assume o próximo ALFA (00:00 às 08:00 de amanhã)
+            const currentHour = new Date().getHours();
+            if (escalaState.isViewingToday && currentHour >= 18 && targetColIdx + 1 < schedule.dateHeaders.length) {
+                const nextAlfaOps = [];
+                schedule.scheduleData.forEach(op => {
+                    const nextShift = (op.shifts[targetColIdx + 1] || '---').trim();
+                    if (nextShift === 'A') nextAlfaOps.push(op.name);
+                });
+                html += `
+                    <div class="sub-panel shift-border-A px-4 py-3 flex flex-wrap items-center justify-between gap-2 border-dashed">
+                        <div class="flex items-center gap-2">
+                            <span class="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-500 border border-amber-500/30 text-[10px] font-bold uppercase tracking-wider">Próximo Turno</span>
+                            <span class="text-xs font-bold uppercase tracking-wider text-amber-500">ALFA Amanhã</span>
+                            <span class="text-xs font-mono text-mut">00:00 às 08:00</span>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            ${nextAlfaOps.length > 0
+                                ? nextAlfaOps.map(name => `
+                                    <button type="button" onclick="window.openFullScheduleModal('${name.replace(/'/g, "\\'")}')" class="px-3 py-1 rounded-lg border border-amber-500/30 bg-amber-500/10 text-sm font-semibold cursor-pointer">
+                                        ${name}
+                                    </button>
+                                `).join('')
+                                : `<span class="text-xs text-mut italic">Sem operador</span>`
+                            }
+                        </div>
+                    </div>
+                `;
+            }
+
+            container.innerHTML = html;
+
+            // Alerta discreto de Férias / Recesso / Licenças iniciando ou retornando nos próximos 3 dias
+            const upcomingLeaveAlerts = [];
+            schedule.scheduleData.forEach(op => {
+                const todayShift = (op.shifts[targetColIdx] || '---').trim();
+                const todayCat = (SHIFT_CONFIG[todayShift] || SHIFT_CONFIG['---']).category;
+
+                for (let step = 1; step <= 3; step++) {
+                    if (targetColIdx + step >= schedule.dateHeaders.length) break;
+                    const futureShift = (op.shifts[targetColIdx + step] || '---').trim();
+                    const futureCfg = SHIFT_CONFIG[futureShift] || SHIFT_CONFIG['---'];
+
+                    if (todayCat !== 'leave' && futureCfg.category === 'leave') {
+                        upcomingLeaveAlerts.push({
+                            type: 'start',
+                            name: op.name,
+                            shift: futureShift,
+                            days: step
+                        });
+                        break;
+                    } else if (todayCat === 'leave' && futureCfg.category !== 'leave' && futureShift !== '---') {
+                        const prevShift = (op.shifts[targetColIdx + step - 1] || '---').trim();
+                        const prevCat = (SHIFT_CONFIG[prevShift] || SHIFT_CONFIG['---']).category;
+                        if (prevCat === 'leave') {
+                            upcomingLeaveAlerts.push({
+                                type: 'return',
+                                name: op.name,
+                                days: step
+                            });
+                            break;
+                        }
+                    }
+                }
+            });
+
+            // Férias / Recesso / Licenças sempre visível + aviso de próximos 3 dias
+            const leaveBox = document.getElementById('leaveListBox');
+            let leaveHtml = '';
+            if (groups.LEAVE.length > 0) {
+                leaveHtml += groups.LEAVE.map(item => `
+                    <button type="button" onclick="window.openFullScheduleModal('${item.name.replace(/'/g, "\\'")}')" class="px-2.5 py-1 rounded border border-rose-500/25 bg-rose-500/10 font-medium cursor-pointer" title="${item.label} (clique para ver no mês)">
+                        ${item.name} <strong class="font-mono text-rose-500 ml-1">${item.shift}</strong>
+                    </button>
+                `).join('');
+            } else {
+                leaveHtml += `<span class="text-mut italic">Nenhum operador em férias/licença</span>`;
+            }
+
+            if (upcomingLeaveAlerts.length > 0) {
+                leaveHtml += `
+                    <div class="w-full pt-1.5 mt-1 border-t border-std flex flex-wrap gap-1.5">
+                        ${upcomingLeaveAlerts.map(al => al.type === 'start'
+                            ? `<span class="px-2 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-500 text-[11px] font-medium">
+                                <i class="fas fa-plane-departure text-[9px] mr-1"></i>${al.name}: inicia <strong>${al.shift}</strong> ${al.days === 1 ? 'amanhã' : `em ${al.days}d`}
+                               </span>`
+                            : `<span class="px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-500 text-[11px] font-medium">
+                                <i class="fas fa-plane-arrival text-[9px] mr-1"></i>${al.name}: retorna ${al.days === 1 ? 'amanhã' : `em ${al.days}d`}
+                               </span>`
+                        ).join('')}
+                    </div>
+                `;
+            }
+            leaveBox.innerHTML = leaveHtml;
+
+            // Folgas do dia sempre visível
+            const offBox = document.getElementById('offListBox');
+            if (groups.OFF.length > 0) {
+                offBox.innerHTML = groups.OFF.map(item => `
+                    <button type="button" onclick="window.openFullScheduleModal('${item.name.replace(/'/g, "\\'")}')" class="px-2.5 py-1 rounded border border-sky-500/20 bg-sky-500/10 font-medium text-sec cursor-pointer" title="Clique para ver escala do mês">
+                        ${item.name} <strong class="font-mono text-sky-500 ml-1">${item.shift}</strong>
+                    </button>
+                `).join('');
+            } else {
+                offBox.innerHTML = `<span class="text-mut italic">Nenhum operador de folga</span>`;
+            }
+        }
+
+        // =========================================================================
+        // 3. MONITOR METAR DA HORA COM ALARME (IDÊNTICO AO SITE ORIGINAL)
+        // =========================================================================
+        const METAR_CONFIG = {
+            localidade: 'SBIZ',
+            proxyApiUrl: '/api/metar',
+            remoteApiUrl: 'https://metargeral.vercel.app/api/metar',
+            intervaloConsulta: 40000,
+            tempoAlerta: 2,
+            volumeAlarme: 0.7,
+            maxHistorico: 10
+        };
+
+        const metarState = {
+            ultimoMetarCompleto: null,
+            ultimaHoraVerificada: new Date().getUTCHours(),
+            metarHoraAtualEncontrado: false,
+            emAlerta: false,
+            alarmeSilenciado: false,
+            historicoMetar: [],
+            consultaAtiva: true,
+            intervalId: null,
+            audioUnlocked: false,
+            simulandoAtraso: false,
+            webAudioBeepInterval: null
+        };
+
+        let audioCtx = null;
+        function playBackupWebAudioBeep() {
+            try {
+                if (METAR_CONFIG.volumeAlarme <= 0) return;
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                const now = audioCtx.currentTime;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(880, now);
+                osc.frequency.setValueAtTime(660, now + 0.22);
+                osc.frequency.setValueAtTime(880, now + 0.44);
+                gain.gain.setValueAtTime(Math.max(0.05, METAR_CONFIG.volumeAlarme * 0.45), now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.65);
+            } catch (e) {}
+        }
+
+        let activeOsNotification = null;
+
+        function updateNotificationIcon() {
+            const icon = document.getElementById('notifPermissionIcon');
+            const btn = document.getElementById('notifPermissionBtn');
+            if (!('Notification' in window)) {
+                icon.className = 'fas fa-bell-slash text-mut';
+                btn.title = 'Notificações não suportadas neste navegador';
+                return;
+            }
+            if (Notification.permission === 'granted') {
+                icon.className = 'fas fa-bell text-emerald-500';
+                btn.title = 'Notificações do Windows ativas para o alarme METAR';
+            } else if (Notification.permission === 'denied') {
+                icon.className = 'fas fa-bell-slash text-rose-500';
+                btn.title = 'Notificações bloqueadas no navegador';
+            } else {
+                icon.className = 'fas fa-bell text-amber-500';
+                btn.title = 'Clique para permitir notificações do Windows no alarme METAR';
+            }
+        }
+
+        window.requestDesktopNotificationPermission = function() {
+            if (!('Notification' in window)) return;
+            if (Notification.permission === 'default') {
+                Notification.requestPermission().then(() => updateNotificationIcon());
+            } else {
+                updateNotificationIcon();
+            }
+        };
+
+        function sendMetarDesktopNotification() {
+            if (!('Notification' in window) || Notification.permission !== 'granted') return;
+            try {
+                if (activeOsNotification) activeOsNotification.close();
+                const horaZ = String(new Date().getUTCHours()).padStart(2, '0') + ':00Z';
+                activeOsNotification = new Notification(`⚠️ ALERTA METAR/SPECI — ${METAR_CONFIG.localidade}`, {
+                    body: `A mensagem da hora (${horaZ}) NÃO foi encontrada na REDEMET! Verifique o envio imediatamente.`,
+                    icon: 'https://cdn-icons-png.flaticon.com/512/3652/3652191.png',
+                    tag: 'metar-alert-dniz',
+                    requireInteraction: true
+                });
+                activeOsNotification.onclick = () => {
+                    window.focus();
+                    activeOsNotification.close();
+                };
+            } catch (e) {}
+        }
+
+        function unlockAudio() {
+            window.requestDesktopNotificationPermission();
+            requestWakeLock();
+            try {
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+            } catch (e) {}
+
+            if (metarState.audioUnlocked) return;
+            metarState.audioUnlocked = true;
+            document.getElementById('audioUnlockBanner').classList.add('hidden');
+
+            // Só pré-carrega o elemento <audio> se não estivermos em alerta ativo (evita pausar o som do alarme)
+            if (!metarState.emAlerta) {
+                const alertSound = document.getElementById('alertSound');
+                const prevVol = alertSound.volume;
+                alertSound.volume = 0;
+                alertSound.play().then(() => {
+                    if (!metarState.emAlerta) {
+                        alertSound.pause();
+                        alertSound.currentTime = 0;
+                    }
+                    alertSound.volume = METAR_CONFIG.volumeAlarme;
+                }).catch(() => {
+                    alertSound.volume = prevVol;
+                });
+            }
+        }
+
+        function calculateMetarAge() {
+            const ageEl = document.getElementById('metarAge');
+            if (!metarState.ultimoMetarCompleto) { ageEl.textContent = ''; return; }
+            const match = metarState.ultimoMetarCompleto.match(/\s(\d{2})(\d{2})(\d{2})Z\s/);
+            if (!match) { ageEl.textContent = ''; return; }
+            const [_, day, hour, minute] = match.map(Number);
+            const now = new Date();
+            let metarDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), day, hour, minute));
+            if (metarDate > now) metarDate.setUTCMonth(metarDate.getUTCMonth() - 1);
+            const diffMinutes = Math.max(0, Math.round((now - metarDate) / 60000));
+            ageEl.textContent = diffMinutes < 60 ? `há ${diffMinutes} min` : `há ${Math.floor(diffMinutes / 60)}h`;
+        }
+
+        async function fetchFromDeceaAiswebDirect(localidade) {
+            const url = `https://api.decea.mil.br/aisweb/?apiKey=1993294556&apiPass=034a940f-27c0-11f1-a4e0-0050569ac2e1&area=met&icaoCode=${localidade}`;
+            const res = await fetch(url);
+            if (!res.ok) throw new Error('Falha DECEA AISWEB');
+            const xmlText = await res.text();
+            const match = xmlText.match(/<metar>([\s\S]*?)<\/metar>/i);
+            let rawMetar = match ? match[1].replace(/<!\[CDATA\[|\]\]>/g, '').trim() : '';
+            if (!rawMetar) {
+                throw new Error('METAR vazio no AISWEB');
+            }
+            if (!rawMetar.startsWith('METAR') && !rawMetar.startsWith('SPECI')) {
+                rawMetar = `METAR ${localidade} ${rawMetar}`;
+            }
+
+            const storageKey = `portal_gerente_metar_hist_${localidade}`;
+            let savedList = [];
+            try {
+                savedList = JSON.parse(localStorage.getItem(storageKey) || '[]');
+            } catch (e) {
+                savedList = [];
+            }
+
+            const now = new Date();
+            const pad = n => String(n).padStart(2, '0');
+            const nowFormatted = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+
+            if (!savedList.some(item => item.mens.trim() === rawMetar)) {
+                savedList.unshift({
+                    mens: rawMetar,
+                    recebimento: nowFormatted
+                });
+                savedList = savedList.slice(0, METAR_CONFIG.maxHistorico);
+                try {
+                    localStorage.setItem(storageKey, JSON.stringify(savedList));
+                } catch (e) {}
+            }
+
+            return {
+                status: true,
+                data: {
+                    data: savedList
+                }
+            };
+        }
+
+        async function fetchMetarData(localidade) {
+            const isGithubPages = window.location.hostname.endsWith('github.io');
+
+            // 1. Se estiver rodando localmente (localhost) ou na Vercel, usa o proxy /api/metar
+            if (window.location.protocol.startsWith('http') && !isGithubPages) {
+                try {
+                    const resLocal = await fetch(`${METAR_CONFIG.proxyApiUrl}?localidade=${localidade}`, { cache: 'no-store' });
+                    if (resLocal.ok && (resLocal.headers.get('content-type') || '').includes('application/json')) {
+                        return await resLocal.json();
+                    }
+                } catch (e) {}
+            }
+
+            // 2. Conexão direta oficial com a API DECEA AISWEB (possui CORS: * liberado nativamente p/ GitHub Pages)
+            try {
+                return await fetchFromDeceaAiswebDirect(localidade);
+            } catch (e) {}
+
+            // 3. Fallback via proxy sem query timestamp (evita erro 520/522 no Cloudflare)
+            const cleanRemote = `${METAR_CONFIG.remoteApiUrl}?localidade=${localidade}`;
+            const resCors = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(cleanRemote)}`);
+            if (resCors.ok) return await resCors.json();
+
+            throw new Error('Não foi possível obter o METAR');
+        }
+
+        window.consultarMetar = async function() {
+            if (!metarState.consultaAtiva) return;
+            atualizarStatus('Consultando...', 'warning');
+            const spinIcon = document.getElementById('refreshSpinIcon');
+            spinIcon.classList.add('fa-spin');
+
+            try {
+                const data = await fetchMetarData(METAR_CONFIG.localidade);
+                if (!data.status) throw new Error(data.message || 'Erro API');
+                setNetworkBannerState(true);
+                if (data.data && data.data.data && data.data.data.length > 0) {
+                    processarRespostaMetar(data);
+                    if (metarState.simulandoAtraso) atualizarStatus('Atraso (Simulado)', 'error');
+                    else if (metarState.emAlerta) atualizarStatus('Em Alerta', 'error');
+                    else atualizarStatus('OK', 'normal');
+                } else {
+                    throw new Error('Sem dados recentes');
+                }
+            } catch (e) {
+                atualizarStatus('Erro de Conexão', 'error');
+                if (!navigator.onLine) setNetworkBannerState(false);
+                document.getElementById('metarRaw').textContent = 'Aguardando METAR/SPECI válido. A REDEMET pode estar offline.';
+            } finally {
+                spinIcon.classList.remove('fa-spin');
+            }
+        };
+
+        function processarRespostaMetar(data) {
+            const agora = new Date();
+            document.getElementById('lastCheckTime').textContent = agora.toTimeString().split(' ')[0];
+            const todas = data.data.data;
+
+            if (todas.length > 0) {
+                const msgExibir = todas.find(m => m.mens.trim().startsWith('SPECI')) || todas[0];
+                const metarTexto = msgExibir.mens.trim();
+                metarState.ultimoMetarCompleto = metarTexto;
+                document.getElementById('metarRaw').textContent = metarTexto;
+                calculateMetarAge();
+
+                const regex = new RegExp(`(METAR|SPECI)(?:\\s+COR)?\\s+(${METAR_CONFIG.localidade})\\s+(\\d{2})(\\d{2})(\\d{2})Z`);
+                const match = metarTexto.match(regex);
+                if (match) {
+                    document.getElementById('metarTimestamp').textContent = `Recebido: ${msgExibir.recebimento} (Msg ${match[3]}${match[4]}${match[5]}Z)`;
+                } else {
+                    document.getElementById('metarTimestamp').textContent = `Recebido: ${msgExibir.recebimento}`;
+                }
+
+                const encontrouHoraAtual = todas.some(m => {
+                    const mMatch = m.mens.trim().match(regex);
+                    return mMatch && parseInt(mMatch[4], 10) === agora.getUTCHours() && parseInt(mMatch[3], 10) === agora.getUTCDate();
+                });
+
+                const checkBadge = document.getElementById('metarHourCheckBadge');
+                if (encontrouHoraAtual && !metarState.simulandoAtraso) {
+                    metarState.metarHoraAtualEncontrado = true;
+                    checkBadge.innerHTML = `<span class="text-emerald-400 font-semibold">● Hora ${String(agora.getUTCHours()).padStart(2, '0')}Z confirmada</span>`;
+                    desativarAlerta();
+                } else {
+                    checkBadge.innerHTML = `<span class="text-amber-400 font-semibold">● Aguardando ${String(agora.getUTCHours()).padStart(2, '0')}Z</span>`;
+                }
+            }
+
+            metarState.historicoMetar = todas.slice(0, METAR_CONFIG.maxHistorico).map(m => ({
+                metar: m.mens.trim(),
+                recebimento: m.recebimento
+            }));
+
+            const histEl = document.getElementById('historyContainer');
+            histEl.innerHTML = metarState.historicoMetar.map(item => `
+                <div class="py-1.5 border-b border-std last:border-0 flex items-center justify-between gap-4">
+                    <span class="break-words">${item.metar}</span>
+                    <span class="text-[10px] text-mut shrink-0">${item.recebimento}</span>
+                </div>
+            `).join('');
+        }
+
+        function verificarHoraCheia() {
+            const agora = new Date();
+            const minutos = agora.getUTCMinutes();
+            const horaAtual = agora.getUTCHours();
+
+            if (metarState.ultimaHoraVerificada !== horaAtual) {
+                metarState.metarHoraAtualEncontrado = false;
+                metarState.alarmeSilenciado = false;
+                metarState.ultimaHoraVerificada = horaAtual;
+                if (metarState.simulandoAtraso) {
+                    metarState.simulandoAtraso = false;
+                    document.getElementById('simularAtrasoBtn').textContent = 'Simular Atraso (Testar Alarme)';
+                }
+                desativarAlerta();
+            }
+
+            if (minutos >= METAR_CONFIG.tempoAlerta && !metarState.metarHoraAtualEncontrado && !metarState.emAlerta && !metarState.alarmeSilenciado) {
+                ativarAlerta();
+            }
+        }
+
+        function atualizarContagemRegressiva() {
+            const agora = new Date();
+            const proxima = new Date(agora);
+            proxima.setUTCHours(agora.getUTCHours() + 1, 0, 0, 0);
+            const diff = proxima - agora;
+            const m = Math.floor((diff / 60000) % 60);
+            const s = Math.floor((diff / 1000) % 60);
+            document.getElementById('countdown').textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+
+            if (metarState.consultaAtiva) {
+                document.getElementById('nextCheckTime').textContent = new Date(agora.getTime() + METAR_CONFIG.intervaloConsulta).toTimeString().split(' ')[0];
+            } else {
+                document.getElementById('nextCheckTime').textContent = 'Pausado';
+            }
+        }
+
+        function atualizarStatus(texto, tipo) {
+            document.getElementById('statusText').textContent = texto;
+            const dot = document.getElementById('statusDot');
+            dot.className = 'w-2 h-2 rounded-full ' + (tipo === 'normal' ? 'bg-emerald-500' : (tipo === 'warning' ? 'bg-amber-500' : 'bg-red-500'));
+        }
+
+        function ativarAlerta() {
+            metarState.emAlerta = true;
+            const alertPanel = document.getElementById('alertPanel');
+            alertPanel.classList.remove('hidden');
+            alertPanel.classList.add('flex');
+            document.body.classList.add('screen-alert');
+
+            sendMetarDesktopNotification();
+
+            // Garante som imediato via sintetizador nativo Web Audio API + MP3
+            playBackupWebAudioBeep();
+            if (!metarState.webAudioBeepInterval) {
+                metarState.webAudioBeepInterval = setInterval(playBackupWebAudioBeep, 1500);
+            }
+
+            try {
+                const alertSound = document.getElementById('alertSound');
+                alertSound.volume = METAR_CONFIG.volumeAlarme;
+                alertSound.play().catch(() => {});
+            } catch (e) {}
+        }
+
+        function desativarAlerta() {
+            metarState.emAlerta = false;
+            const alertPanel = document.getElementById('alertPanel');
+            alertPanel.classList.add('hidden');
+            alertPanel.classList.remove('flex');
+            document.body.classList.remove('screen-alert');
+
+            if (activeOsNotification) {
+                try { activeOsNotification.close(); } catch (e) {}
+                activeOsNotification = null;
+            }
+
+            const alertSound = document.getElementById('alertSound');
+            alertSound.pause();
+            if (alertSound.currentTime > 0) alertSound.currentTime = 0;
+
+            if (metarState.webAudioBeepInterval) {
+                clearInterval(metarState.webAudioBeepInterval);
+                metarState.webAudioBeepInterval = null;
+            }
+        }
+
+        function silenciarAlarme() {
+            metarState.alarmeSilenciado = true;
+            desativarAlerta();
+            if (metarState.simulandoAtraso) {
+                metarState.simulandoAtraso = false;
+                document.getElementById('simularAtrasoBtn').textContent = 'Simular Atraso (Testar Alarme)';
+                atualizarStatus('OK', 'normal');
+            }
+        }
+
+        // =========================================================================
+        // 4. PORTAIS E SISTEMAS OFICIAIS ABAIXO (VISUAL LIMPO E SÓBRIO)
+        // =========================================================================
+        const defaultDniSystems = [
+            { id: "escala-dniz", title: "Escala DNIZ", url: "https://gernavsbiz.github.io/escaladniz/", description: "Gerenciamento de turnos e escalas mensais.", icon: "fa-calendar-check", category: "operacional" },
+            { id: "monitoramento", title: "Monitoramento", url: "https://gernavsbiz.github.io/monitoramentopista/", description: "Dashboard de ocupação de pista em tempo real.", icon: "fa-tower-observation", category: "operacional" },
+            { id: "analise-trafego", title: "Análise de Tráfego", url: "https://analisetrafego.onrender.com/", description: "Estatísticas e fluxo de movimento operacional.", icon: "fa-chart-column", category: "operacional" },
+            { id: "controle-acesso", title: "Controle de Acesso", url: "https://gernavsbiz.github.io/controleacesso/", description: "Controle de acesso a áreas restritas.", icon: "fa-key", category: "operacional" },
+            { id: "portal-avsec", title: "Portal AVSEC", url: "https://gernavsbiz.github.io/avsec/#avsec", description: "Procedimentos e normas de segurança AVSEC.", icon: "fa-shield-halved", category: "operacional" },
+            { id: "metar-geral", title: "METAR Geral", url: "https://metargeral.vercel.app/", description: "Monitor METAR/SPECI original.", icon: "fa-cloud-sun", category: "meteorologia" },
+            { id: "metar-relatorio", title: "METAR Relatório", url: "https://metargeral.vercel.app/metar_relatorio.html", description: "Relatórios históricos em PDF por data e horário.", icon: "fa-file-pdf", category: "meteorologia" },
+            { id: "mural-digital", title: "Mural Digital", url: "https://gernavsbiz.github.io/mural/index.html?unidade=DNIZ", description: "Avisos, circulares e comunicados da unidade.", icon: "fa-bullhorn", category: "administrativo" },
+            { id: "gerenciador-cobranca", title: "Gerenciador de Cobrança", url: "https://gernavsbiz.pythonanywhere.com/", description: "Tarifas, boletos e controle financeiro.", icon: "fa-file-invoice-dollar", category: "administrativo" },
+            { id: "alteracao-horario-adm", title: "Alteração de Horário AFIS", url: "https://altercaohorario.vercel.app/admin", description: "Solicitações de alteração de horário AFIS.", icon: "fa-clock-rotate-left", category: "administrativo" },
+            { id: "mural-digital-adm", title: "Mural Digital ADM", url: "https://gernavsbiz.github.io/mural/admin.html", description: "Administração de avisos do Mural Digital.", icon: "fa-sliders", category: "administrativo" },
+            { id: "dniz-ai", title: "DNIZ AI", url: "http://10.130.5.2:8000/", description: "Assistente virtual e ferramentas de IA.", icon: "fa-robot", category: "desenvolvimento" },
+            { id: "aisweb-navigator", title: "AISWEB Navigator", url: "http://127.0.0.1:5000/", description: "Navegador local integrado ao AISWEB.", icon: "fa-compass", category: "desenvolvimento" }
+        ];
+
+        const hubCategories = [
+            { id: 'all', label: 'Todos' },
+            { id: 'operacional', label: 'Operacional' },
+            { id: 'meteorologia', label: 'Meteorologia' },
+            { id: 'administrativo', label: 'Administrativo' },
+            { id: 'desenvolvimento', label: 'Desenvolvimento' }
+        ];
+
+        let hubState = {
+            category: 'all',
+            search: '',
+            systems: JSON.parse(localStorage.getItem('portal_gerente_systems') || 'null') || defaultDniSystems
+        };
+
+        const catColors = {
+            operacional:     'text-emerald-500 bg-emerald-500/10 border-emerald-500/25',
+            meteorologia:    'text-sky-500 bg-sky-500/10 border-sky-500/25',
+            administrativo:  'text-amber-500 bg-amber-500/10 border-amber-500/25',
+            desenvolvimento: 'text-indigo-500 bg-indigo-500/10 border-indigo-500/25'
+        };
+
+        function renderHubCategories() {
+            document.getElementById('hubCategoryTabs').innerHTML = hubCategories.map(cat => {
+                const active = hubState.category === cat.id;
+                return `
+                    <button onclick="window.setHubCategory('${cat.id}')" class="px-3 py-1 rounded-md text-xs font-medium transition ${
+                        active ? 'bg-sky-500/15 text-sky-500 border border-sky-500/30 font-semibold' : 'text-mut hover:text-sec'
+                    }">
+                        ${cat.label}
+                    </button>
+                `;
+            }).join('');
+        }
+
+        function renderHubSystems() {
+            let filtered = hubState.systems;
+            if (hubState.category !== 'all') {
+                filtered = filtered.filter(s => s.category === hubState.category);
+            }
+            if (hubState.search.trim() !== '') {
+                const q = hubState.search.toLowerCase();
+                filtered = filtered.filter(s =>
+                    s.title.toLowerCase().includes(q) ||
+                    (s.description || '').toLowerCase().includes(q)
+                );
+            }
+
+            document.getElementById('hubSystemsGrid').innerHTML = filtered.map(sys => {
+                const iconStyle = catColors[sys.category] || 'text-sky-500 bg-sky-500/10 border-sky-500/25';
+                return `
+                <a href="${sys.url}" target="_blank" class="sub-panel p-3.5 flex items-start gap-3 hover:border-sky-500/50 transition group">
+                    <div class="w-9 h-9 rounded-lg border flex items-center justify-center shrink-0 transition ${iconStyle}">
+                        <i class="fas ${sys.icon || 'fa-link'} text-sm"></i>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center justify-between gap-1">
+                            <h4 class="font-semibold text-sm truncate group-hover:text-sky-500 transition">${sys.title}</h4>
+                            <i class="fas fa-arrow-up-right-from-square text-[10px] text-mut group-hover:text-sky-500 shrink-0"></i>
+                        </div>
+                        <p class="text-xs text-mut line-clamp-1 mt-0.5">${sys.description || ''}</p>
+                    </div>
+                </a>
+                `;
+            }).join('');
+        }
+
+        window.setHubCategory = function(catId) {
+            hubState.category = catId;
+            renderHubCategories();
+            renderHubSystems();
+        };
+
+        window.filterHubSystems = function(val) {
+            hubState.search = val;
+            renderHubSystems();
+        };
+
+        window.openSystemModal = function() {
+            const el = document.getElementById('systemModal');
+            el.classList.remove('hidden');
+            el.classList.add('flex');
+        };
+
+        window.closeSystemModal = function() {
+            const el = document.getElementById('systemModal');
+            el.classList.add('hidden');
+            el.classList.remove('flex');
+            document.getElementById('systemForm').reset();
+        };
+
+        window.saveSystemShortcut = function(e) {
+            e.preventDefault();
+            hubState.systems.push({
+                id: 'custom-' + Date.now(),
+                title: document.getElementById('sysTitleInput').value.trim(),
+                url: document.getElementById('sysUrlInput').value.trim(),
+                description: document.getElementById('sysDescInput').value.trim(),
+                category: document.getElementById('sysCatInput').value,
+                icon: document.getElementById('sysIconInput').value
+            });
+            localStorage.setItem('portal_gerente_systems', JSON.stringify(hubState.systems));
+            renderHubSystems();
+            window.closeSystemModal();
+        };
+
+        // =========================================================================
+        // 5. MODAL ESCALA MÊS, UPLOAD CSV, TEMA E INICIALIZAÇÃO
+        // =========================================================================
+        let modalHighlightedOperator = '';
+
+        function getModalShiftCellClass(shift) {
+            const s = (shift || '').trim();
+            if (s === 'A') return 'text-amber-500 font-bold bg-amber-500/10';
+            if (s === 'B') return 'text-sky-500 font-bold bg-sky-500/10';
+            if (s === 'C') return 'text-indigo-500 font-bold bg-indigo-500/10';
+            if (s === 'HA' || s === 'SE') return 'text-emerald-500 font-semibold bg-emerald-500/10';
+            if (s === 'FE' || s === 'R' || s === 'AM' || s === 'LM' || s === 'LP') return 'text-rose-500 font-semibold bg-rose-500/10';
+            return 'text-sec';
+        }
+
+        function renderModalScheduleTable() {
+            const schedule = escalaState.currentSchedule;
+            if (!schedule) return;
+            const dayStatuses = getDayStatusArray(schedule.dateHeaders);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            const q = modalHighlightedOperator.trim().toLowerCase();
+            const clearBtn = document.getElementById('modalClearFilterBtn');
+            const summaryEl = document.getElementById('modalOperatorSummary');
+
+            if (q) {
+                clearBtn.classList.remove('hidden');
+            } else {
+                clearBtn.classList.add('hidden');
+                summaryEl.classList.add('hidden');
+            }
+
+            const matchedOps = q
+                ? schedule.scheduleData.filter(op => op.name.toLowerCase().includes(q))
+                : schedule.scheduleData;
+
+            if (q && matchedOps.length === 1) {
+                const op = matchedOps[0];
+                let countA = 0, countB = 0, countC = 0, countSup = 0, countLeave = 0, countOff = 0;
+                op.shifts.forEach((sh, idx) => {
+                    if (dayStatuses[idx] !== 'current') return;
+                    const s = (sh || '').trim();
+                    const cat = (SHIFT_CONFIG[s] || SHIFT_CONFIG['---']).category;
+                    if (s === 'A') countA++;
+                    else if (s === 'B') countB++;
+                    else if (s === 'C') countC++;
+                    else if (cat === 'support') countSup++;
+                    else if (cat === 'leave') countLeave++;
+                    else if (cat === 'off') countOff++;
+                });
+                summaryEl.textContent = `${op.name}: ALFA(${countA}) • BRAVO(${countB}) • CHARLIE(${countC}) • ADM/SE(${countSup}) • Folgas(${countOff}) • Férias/Lic(${countLeave})`;
+                summaryEl.classList.remove('hidden');
+            } else {
+                summaryEl.classList.add('hidden');
+            }
+
+            document.getElementById('fullScheduleTableContainer').innerHTML = `
+                <table class="w-full border-collapse text-xs">
+                    <thead>
+                        <tr class="border-b border-std">
+                            <th class="p-2 text-left font-bold sticky left-0 z-10" style="background-color: var(--bg-surface);">Operador (clique p/ focar)</th>
+                            ${schedule.dateHeaders.map((day, idx) => {
+                                const colDate = getColumnDateObject(schedule, idx, dayStatuses);
+                                const isToday = colDate.getTime() === today.getTime();
+                                const isCurrent = dayStatuses[idx] === 'current';
+                                return `<th class="p-2 text-center min-w-[34px] ${isToday ? 'bg-emerald-500/20 text-emerald-400 font-bold' : ''} ${!isCurrent ? 'opacity-30' : ''}">${day}</th>`;
+                            }).join('')}
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y border-std">
+                        ${schedule.scheduleData.map(op => {
+                            const isMatch = !q || op.name.toLowerCase().includes(q);
+                            const isExactFocus = q && op.name.toLowerCase().includes(q);
+                            return `
+                            <tr onclick="window.toggleModalOperatorFocus('${op.name.replace(/'/g, "\\'")}')" class="cursor-pointer transition ${isExactFocus ? 'ring-1 ring-emerald-500/60 bg-emerald-500/5' : ''} ${!isMatch ? 'opacity-20' : 'hover:opacity-90'}">
+                                <td class="p-2 font-semibold whitespace-nowrap sticky left-0 z-10" style="background-color: var(--bg-surface);">
+                                    ${op.name}
+                                </td>
+                                ${op.shifts.map((shift, dIdx) => {
+                                    const isCurrent = dayStatuses[dIdx] === 'current';
+                                    const cellClass = getModalShiftCellClass(shift);
+                                    return `<td class="p-1.5 text-center font-mono ${cellClass} ${!isCurrent ? 'opacity-25' : ''}">${shift}</td>`;
+                                }).join('')}
+                            </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        window.filterModalScheduleOperator = function(val) {
+            modalHighlightedOperator = val || '';
+            const input = document.getElementById('modalOperatorSearch');
+            if (input && input.value !== modalHighlightedOperator) {
+                input.value = modalHighlightedOperator;
+            }
+            renderModalScheduleTable();
+        };
+
+        window.toggleModalOperatorFocus = function(opName) {
+            if (modalHighlightedOperator.toLowerCase() === opName.toLowerCase()) {
+                window.filterModalScheduleOperator('');
+            } else {
+                window.filterModalScheduleOperator(opName);
+            }
+        };
+
+        window.openFullScheduleModal = function(initialOperator = '') {
+            const schedule = escalaState.currentSchedule;
+            if (!schedule) return;
+            document.getElementById('modalScheduleTitle').textContent = `Escala — ${schedule.monthName} ${schedule.year}`;
+            modalHighlightedOperator = typeof initialOperator === 'string' ? initialOperator : '';
+            const searchInput = document.getElementById('modalOperatorSearch');
+            if (searchInput) searchInput.value = modalHighlightedOperator;
+
+            renderModalScheduleTable();
+
+            const el = document.getElementById('fullScheduleModal');
+            el.classList.remove('hidden');
+            el.classList.add('flex');
+        };
+
+        window.closeFullScheduleModal = function() {
+            const el = document.getElementById('fullScheduleModal');
+            el.classList.add('hidden');
+            el.classList.remove('flex');
+        };
+
+        window.handleLocalCsvUpload = function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const lines = ev.target.result.split(/\r\n?|\n/);
+                let scheduleData = [], dateHeaders = [], monthName = '', year = '', DATE_ROW = -1, DATA_START = -1;
+                for (let i = 10; i < lines.length; i++) {
+                    const parts = lines[i].split(';');
+                    if (parts[0].trim() === '' && parts.length > 15 && !isNaN(parseInt(parts[1]?.trim(), 10))) {
+                        DATE_ROW = i; DATA_START = i + 1; break;
+                    }
+                }
+                if (DATE_ROW === -1) return alert('CSV inválido');
+                monthName = (lines[0]?.split(';')[0]?.trim() || MONTHS_FULL[new Date().getMonth()]).toUpperCase();
+                year = lines[3]?.split(';')[0]?.trim()?.match(/^20\d{2}$/) ? lines[3].split(';')[0].trim() : String(new Date().getFullYear());
+
+                const rawHeaders = lines[DATE_ROW].split(';');
+                for (let i = 1; i < rawHeaders.length; i++) {
+                    let val = rawHeaders[i].trim().replace(/"/g, '');
+                    if (val === '' && dateHeaders[dateHeaders.length - 1] === '30') val = '31';
+                    if (val && !isNaN(val)) dateHeaders.push(val);
+                    else if (val === '' && dateHeaders.length > 0) break;
+                }
+                for (let i = DATA_START; i < lines.length; i++) {
+                    const parts = (lines[i] || '').trim().split(';');
+                    const name = (parts[0] || '').trim().replace(/"/g, '');
+                    if (name.length > 2 && isNaN(name) && name !== 'PNA' && !name.includes('LEGENDA')) {
+                        const shifts = parts.slice(1, dateHeaders.length + 1).map(s => {
+                            const cs = s.trim().replace(/"/g, '');
+                            return SHIFT_CONFIG[cs] ? cs : '---';
+                        });
+                        if (shifts.length === dateHeaders.length) scheduleData.push({ name, shifts });
+                    }
+                }
+                localStorage.setItem('portal_gerente_custom_csv_schedule', JSON.stringify({ scheduleData, dateHeaders, monthName, year, unitId: 'dniz' }));
+                loadAllSchedulesFromFirebase().then(() => window.selectScheduleById('local::csv'));
+            };
+            reader.readAsText(file, 'ISO-8859-1');
+        };
+
+        window.toggleTheme = function() {
+            document.body.classList.toggle('light-mode');
+            const isLight = document.body.classList.contains('light-mode');
+            localStorage.setItem('portal_gerente_theme', isLight ? 'light' : 'dark');
+            document.getElementById('themeIcon').className = isLight ? 'fas fa-moon text-sec' : 'fas fa-sun text-sec';
+        };
+
+        window.toggleFullscreen = function() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(() => {});
+            } else {
+                document.exitFullscreen().catch(() => {});
+            }
+        };
+
+        // =========================================================================
+        // 6. CONFIABILIDADE "SEMPRE ABERTO": WAKE LOCK + MONITOR DE REDE
+        // =========================================================================
+        let wakeLockSentinel = null;
+        let wakeLockEnabled = localStorage.getItem('portal_gerente_wakelock') !== 'false';
+
+        function updateWakeLockUi() {
+            const icon = document.getElementById('wakeLockIcon');
+            const btn = document.getElementById('wakeLockBtn');
+            if (!('wakeLock' in navigator)) {
+                icon.className = 'fas fa-bolt text-mut';
+                btn.title = 'Wake Lock não suportado neste navegador';
+                return;
+            }
+            if (wakeLockEnabled && wakeLockSentinel) {
+                icon.className = 'fas fa-bolt text-emerald-500';
+                btn.title = 'Tela Sempre Ativa: LIGADO (impede desligamento do monitor)';
+            } else if (wakeLockEnabled) {
+                icon.className = 'fas fa-bolt text-amber-500';
+                btn.title = 'Tela Sempre Ativa: aguardando foco na janela';
+            } else {
+                icon.className = 'fas fa-bolt text-mut';
+                btn.title = 'Tela Sempre Ativa: DESLIGADO (clique para ativar)';
+            }
+        }
+
+        async function requestWakeLock() {
+            if (!('wakeLock' in navigator) || !wakeLockEnabled) {
+                updateWakeLockUi();
+                return;
+            }
+            try {
+                if (wakeLockSentinel) return;
+                wakeLockSentinel = await navigator.wakeLock.request('screen');
+                wakeLockSentinel.addEventListener('release', () => {
+                    wakeLockSentinel = null;
+                    updateWakeLockUi();
+                });
+                updateWakeLockUi();
+            } catch (e) {
+                updateWakeLockUi();
+            }
+        }
+
+        window.toggleWakeLock = async function() {
+            wakeLockEnabled = !wakeLockEnabled;
+            localStorage.setItem('portal_gerente_wakelock', String(wakeLockEnabled));
+            if (wakeLockEnabled) {
+                await requestWakeLock();
+            } else if (wakeLockSentinel) {
+                try { await wakeLockSentinel.release(); } catch (e) {}
+                wakeLockSentinel = null;
+            }
+            updateWakeLockUi();
+        };
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && wakeLockEnabled) {
+                requestWakeLock();
+            }
+        });
+
+        function setNetworkBannerState(isOnline) {
+            const banner = document.getElementById('offlineNetworkBanner');
+            const headerDot = document.getElementById('networkHeaderDot');
+            if (isOnline) {
+                banner.classList.add('hidden');
+                headerDot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500';
+                headerDot.title = 'Conectado à rede';
+            } else {
+                banner.classList.remove('hidden');
+                headerDot.className = 'w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse';
+                headerDot.title = 'Sem conexão com a internet';
+            }
+        }
+
+        window.addEventListener('online', () => {
+            setNetworkBannerState(true);
+            window.consultarMetar();
+        });
+
+        window.addEventListener('offline', () => {
+            setNetworkBannerState(false);
+            atualizarStatus('Sem Rede', 'error');
+        });
+
+        function init() {
+            updateNotificationIcon();
+            requestWakeLock();
+            setNetworkBannerState(navigator.onLine);
+            if (localStorage.getItem('portal_gerente_theme') === 'light') {
+                document.body.classList.add('light-mode');
+                document.getElementById('themeIcon').className = 'fas fa-moon text-sec';
+            }
+
+            const vol = localStorage.getItem('volumeAlarme');
+            if (vol !== null) {
+                METAR_CONFIG.volumeAlarme = parseFloat(vol);
+                document.getElementById('volumeControl').value = vol;
+            }
+            document.getElementById('alertSound').volume = METAR_CONFIG.volumeAlarme;
+
+            const autoRef = localStorage.getItem('autoRefresh');
+            if (autoRef !== null) {
+                metarState.consultaAtiva = autoRef === 'true';
+                document.getElementById('autoRefresh').checked = metarState.consultaAtiva;
+            }
+
+            const icao = localStorage.getItem('aerodromo');
+            if (icao) {
+                METAR_CONFIG.localidade = icao;
+                document.getElementById('aerodromoInput').value = icao;
+                document.getElementById('metarHeaderTitle').textContent = `METAR / SPECI — ${icao}`;
+                document.getElementById('headerTitle').textContent = `PORTAL GERENTE DNIZ • ${icao}`;
+            }
+
+            document.getElementById('silenceButton').addEventListener('click', silenciarAlarme);
+            document.getElementById('simularAtrasoBtn').addEventListener('click', () => {
+                unlockAudio();
+                if (metarState.simulandoAtraso) {
+                    metarState.simulandoAtraso = false;
+                    desativarAlerta();
+                    document.getElementById('simularAtrasoBtn').textContent = 'Simular Atraso (Testar Alarme)';
+                    window.consultarMetar();
+                } else {
+                    metarState.simulandoAtraso = true;
+                    metarState.metarHoraAtualEncontrado = false;
+                    metarState.alarmeSilenciado = false;
+                    ativarAlerta();
+                    atualizarStatus('Atraso (Simulado)', 'error');
+                    document.getElementById('simularAtrasoBtn').textContent = 'Parar Simulação';
+                }
+            });
+
+            document.getElementById('alterarAerodromo').addEventListener('click', () => {
+                const v = document.getElementById('aerodromoInput').value.trim().toUpperCase();
+                if (!/^[A-Z]{4}$/.test(v)) return alert('Código ICAO inválido.');
+                METAR_CONFIG.localidade = v;
+                localStorage.setItem('aerodromo', v);
+                document.getElementById('metarHeaderTitle').textContent = `METAR / SPECI — ${v}`;
+                document.getElementById('headerTitle').textContent = `PORTAL GERENTE DNIZ • ${v}`;
+                metarState.metarHoraAtualEncontrado = false;
+                desativarAlerta();
+                window.consultarMetar();
+            });
+
+            document.getElementById('aerodromoInput').addEventListener('keypress', e => {
+                if (e.key === 'Enter') document.getElementById('alterarAerodromo').click();
+            });
+
+            document.getElementById('volumeControl').addEventListener('input', e => {
+                METAR_CONFIG.volumeAlarme = parseFloat(e.target.value);
+                document.getElementById('alertSound').volume = METAR_CONFIG.volumeAlarme;
+                localStorage.setItem('volumeAlarme', e.target.value);
+            });
+
+            document.getElementById('autoRefresh').addEventListener('change', e => {
+                metarState.consultaAtiva = e.target.checked;
+                localStorage.setItem('autoRefresh', metarState.consultaAtiva);
+                clearInterval(metarState.intervalId);
+                if (metarState.consultaAtiva) metarState.intervalId = setInterval(window.consultarMetar, METAR_CONFIG.intervaloConsulta);
+            });
+
+            document.addEventListener('click', unlockAudio);
+
+            window.consultarMetar();
+            if (metarState.consultaAtiva) {
+                metarState.intervalId = setInterval(window.consultarMetar, METAR_CONFIG.intervaloConsulta);
+            }
+            setInterval(verificarHoraCheia, 1000);
+            setInterval(atualizarContagemRegressiva, 1000);
+            setInterval(calculateMetarAge, 60000);
+
+            loadAllSchedulesFromFirebase();
+            renderHubCategories();
+            renderHubSystems();
+        }
+
+        init();
+    </script>
+</body>
+</html>
