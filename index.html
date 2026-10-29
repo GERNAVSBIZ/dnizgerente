@@ -230,7 +230,7 @@
                     </div>
 
                     <!-- Solicitações de Alteração de Horário AFIS (Prorrogação / Antecipação) do Dia -->
-                    <div id="scheduleAlteracoesBox" class="mt-4 pt-4 border-t border-std">
+                    <div id="scheduleAlteracoesBox" class="hidden mt-4 pt-4 border-t border-std">
                         <div class="flex items-center justify-between mb-2">
                             <div class="text-[11px] font-bold uppercase tracking-wider text-amber-500 flex items-center gap-1.5">
                                 <i class="fas fa-clock-rotate-left text-[10px]"></i>
@@ -241,9 +241,7 @@
                                 Abrir Painel ADM <i class="fas fa-arrow-up-right-from-square text-[9px] ml-0.5"></i>
                             </a>
                         </div>
-                        <div id="alteracoesListContainer" class="space-y-2 text-xs">
-                            <div class="text-mut italic">Verificando solicitações do dia...</div>
-                        </div>
+                        <div id="alteracoesListContainer" class="space-y-2 text-xs"></div>
                     </div>
                 </div>
 
@@ -1001,9 +999,10 @@
         }
 
         function renderAlteracoesOfTheDay() {
+            const boxEl = document.getElementById('scheduleAlteracoesBox');
             const listEl = document.getElementById('alteracoesListContainer');
             const badgeEl = document.getElementById('alteracoesCountBadge');
-            if (!listEl) return;
+            if (!listEl || !boxEl) return;
 
             const d = escalaState.selectedDate;
             const pad = n => String(n).padStart(2, '0');
@@ -1024,11 +1023,13 @@
             });
 
             if (dayRequests.length === 0) {
+                boxEl.classList.add('hidden');
                 badgeEl.classList.add('hidden');
-                listEl.innerHTML = `<div class="sub-panel px-3 py-2 text-mut italic">Nenhuma solicitação de prorrogação ou antecipação para este dia.</div>`;
+                listEl.innerHTML = '';
                 return;
             }
 
+            boxEl.classList.remove('hidden');
             badgeEl.textContent = String(dayRequests.length);
             badgeEl.classList.remove('hidden');
 
