@@ -494,11 +494,16 @@
                 `${WEEKDAYS_FULL[now.getDay()]}, ${String(now.getDate()).padStart(2, '0')} de ${MONTHS_FULL[now.getMonth()]}`;
 
             if (now.getDate() !== lastTrackedLocalDay) {
+                const prevMonth = escalaState.selectedDate ? escalaState.selectedDate.getMonth() : now.getMonth();
                 lastTrackedLocalDay = now.getDate();
                 lastTrackedLocalHour = now.getHours();
-                if (escalaState.isViewingToday) {
-                    escalaState.selectedDate = new Date();
-                    escalaState.selectedDate.setHours(0, 0, 0, 0);
+                // Na virada da meia-noite (00:00), avança automaticamente para o novo dia de "Hoje"
+                escalaState.selectedDate = new Date();
+                escalaState.selectedDate.setHours(0, 0, 0, 0);
+                escalaState.isViewingToday = true;
+                if (now.getMonth() !== prevMonth) {
+                    loadAllSchedulesFromFirebase();
+                } else {
                     renderEscalaOfTheDay();
                 }
             } else if (now.getHours() !== lastTrackedLocalHour) {
@@ -767,14 +772,15 @@
                 return;
             }
 
-            const groups = { A: [], B: [], C: [], SUPPORT: [], OFF: [], LEAVE: [] };
+            const groups = { A: [], B: [], C: [], OFF: [], LEAVE: [] };
             schedule.scheduleData.forEach(op => {
+                // Oculta WILKSON da escala diária operacional (horário administrativo)
+                if ((op.name || '').toUpperCase().includes('WILKSON')) return;
                 const s = (op.shifts[targetColIdx] || '---').trim();
                 const cfg = SHIFT_CONFIG[s] || SHIFT_CONFIG['---'];
                 if (s === 'A') groups.A.push(op.name);
                 else if (s === 'B') groups.B.push(op.name);
                 else if (s === 'C') groups.C.push(op.name);
-                else if (cfg.category === 'support') groups.SUPPORT.push({ name: op.name, shift: s });
                 else if (cfg.category === 'off') groups.OFF.push({ name: op.name, shift: s });
                 else if (cfg.category === 'leave') groups.LEAVE.push({ name: op.name, shift: s, label: cfg.name });
             });
@@ -813,21 +819,6 @@
                 `;
             }).join('');
 
-            if (groups.SUPPORT.length > 0) {
-                html += `
-                    <div class="sub-panel shift-border-S px-4 py-3 flex flex-wrap items-center justify-between gap-2">
-                        <span class="text-xs font-bold uppercase tracking-wider text-emerald-500">ADM / Sobreaviso</span>
-                        <div class="flex flex-wrap gap-2">
-                            ${groups.SUPPORT.map(item => `
-                                <button type="button" onclick="window.openFullScheduleModal('${item.name.replace(/'/g, "\\'")}')" title="Clique para destacar ${item.name} na escala mensal" class="px-3 py-1 rounded-lg border border-std hover:border-emerald-500/50 text-sm font-semibold transition cursor-pointer" style="background-color: var(--bg-surface);">
-                                    ${item.name} <strong class="font-mono text-xs text-emerald-500 ml-1">${item.shift}</strong>
-                                </button>
-                            `).join('')}
-                        </div>
-                    </div>
-                `;
-            }
-
             // Visão Automática pós-18h: como o turno CHARLIE encerra às 18:00, exibe quem assume o próximo ALFA (00:00 às 08:00 de amanhã)
             const currentHour = new Date().getHours();
             if (escalaState.isViewingToday && currentHour >= 18 && targetColIdx + 1 < schedule.dateHeaders.length) {
@@ -862,6 +853,7 @@
             // Alerta discreto de Férias / Recesso / Licenças iniciando ou retornando nos próximos 3 dias
             const upcomingLeaveAlerts = [];
             schedule.scheduleData.forEach(op => {
+                if ((op.name || '').toUpperCase().includes('WILKSON')) return;
                 const todayShift = (op.shifts[targetColIdx] || '---').trim();
                 const todayCat = (SHIFT_CONFIG[todayShift] || SHIFT_CONFIG['---']).category;
 
