@@ -2,6 +2,7 @@ const http = require('http');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
+const { exec } = require('child_process');
 
 const PORT = process.env.PORT || 8080;
 const PROXY_TARGET = 'https://metargeral.vercel.app';
@@ -28,6 +29,15 @@ const server = http.createServer((req, res) => {
     if (req.method === 'OPTIONS') {
         res.writeHead(204);
         res.end();
+        return;
+    }
+
+    if (req.url.startsWith('/api/beep')) {
+        // Aciona o Bip nativo de sistema/placa-mae do Windows ([console]::Beep + SystemSounds)
+        process.stdout.write('\x07');
+        exec('powershell -NoProfile -Command "[console]::Beep(1400, 350); [console]::Beep(1000, 350); [System.Media.SystemSounds]::Hand.Play()"', () => {});
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ ok: true }));
         return;
     }
 

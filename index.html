@@ -331,7 +331,7 @@
 
                         <label class="flex items-center gap-1.5 cursor-pointer select-none text-sec font-medium">
                             <input type="checkbox" id="autoRefresh" checked class="w-4 h-4">
-                            <span>Auto (40s)</span>
+                            <span>Auto (30s)</span>
                         </label>
 
                         <button id="simularAtrasoBtn" class="h-8 px-3 rounded-lg bg-red-600/90 hover:bg-red-600 text-white font-semibold transition">
@@ -942,7 +942,7 @@
             localidade: 'SBIZ',
             proxyApiUrl: '/api/metar',
             remoteApiUrl: 'https://metargeral.vercel.app/api/metar',
-            intervaloConsulta: 40000,
+            intervaloConsulta: 30000,
             tempoAlerta: 2,
             volumeAlarme: 0.7,
             maxHistorico: 10
@@ -959,28 +959,37 @@
             intervalId: null,
             audioUnlocked: false,
             simulandoAtraso: false,
-            webAudioBeepInterval: null
+            webAudioBeepInterval: null,
+            windowsNotifInterval: null
         };
 
         let audioCtx = null;
         function playBackupWebAudioBeep() {
+            // 1. Aciona o Bip de Hardware/Sistema do Windows via servidor local (se estiver rodando na máquina)
+            try {
+                fetch('http://localhost:8080/api/beep', { mode: 'no-cors', cache: 'no-store' }).catch(() => {});
+            } catch (e) {}
+
+            // 2. Bip agudo de onda quadrada (padrão PC Speaker / BIOS 1400Hz-1000Hz) + Sirene Web Audio
             try {
                 if (METAR_CONFIG.volumeAlarme <= 0) return;
                 if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 if (audioCtx.state === 'suspended') audioCtx.resume();
                 const now = audioCtx.currentTime;
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(880, now);
-                osc.frequency.setValueAtTime(660, now + 0.22);
-                osc.frequency.setValueAtTime(880, now + 0.44);
-                gain.gain.setValueAtTime(Math.max(0.05, METAR_CONFIG.volumeAlarme * 0.45), now);
-                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
-                osc.start(now);
-                osc.stop(now + 0.65);
+
+                // Oscilador 1: Bip estilo PC Speaker / Placa-Mãe (Square Wave 1400Hz / 1000Hz)
+                const oscBeep = audioCtx.createOscillator();
+                const gainBeep = audioCtx.createGain();
+                oscBeep.type = 'square';
+                oscBeep.frequency.setValueAtTime(1400, now);
+                oscBeep.frequency.setValueAtTime(1000, now + 0.18);
+                oscBeep.frequency.setValueAtTime(1400, now + 0.36);
+                gainBeep.gain.setValueAtTime(Math.max(0.1, METAR_CONFIG.volumeAlarme * 0.55), now);
+                gainBeep.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+                oscBeep.connect(gainBeep);
+                gainBeep.connect(audioCtx.destination);
+                oscBeep.start(now);
+                oscBeep.stop(now + 0.6);
             } catch (e) {}
         }
 
@@ -1020,10 +1029,12 @@
             try {
                 if (activeOsNotification) activeOsNotification.close();
                 const horaZ = String(new Date().getUTCHours()).padStart(2, '0') + ':00Z';
+                // silent: false força o som/bip nativo de notificação do Windows
                 activeOsNotification = new Notification(`⚠️ ALERTA METAR/SPECI — ${METAR_CONFIG.localidade}`, {
                     body: `A mensagem da hora (${horaZ}) NÃO foi encontrada na REDEMET! Verifique o envio imediatamente.`,
                     icon: 'https://cdn-icons-png.flaticon.com/512/3652/3652191.png',
-                    tag: 'metar-alert-dniz',
+                    tag: 'metar-alert-dniz-' + Date.now(),
+                    silent: false,
                     requireInteraction: true
                 });
                 activeOsNotification.onclick = () => {
@@ -1075,9 +1086,25 @@
             ageEl.textContent = diffMinutes < 60 ? `há ${diffMinutes} min` : `há ${Math.floor(diffMinutes / 60)}h`;
         }
 
+        function fetchWithTimeout(url, options = {}, timeoutMs = 4000) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), timeoutMs);
+            return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timer));
+        }
+
+        function loadCachedMetarImmediately(localidade) {
+            try {
+                const storageKey = `portal_gerente_metar_hist_${localidade}`;
+                const savedList = JSON.parse(localStorage.getItem(storageKey) || '[]');
+                if (savedList.length > 0) {
+                    processarRespostaMetar({ status: true, data: { data: savedList } });
+                }
+            } catch (e) {}
+        }
+
         async function fetchFromDeceaAiswebDirect(localidade) {
             const url = `https://api.decea.mil.br/aisweb/?apiKey=1993294556&apiPass=034a940f-27c0-11f1-a4e0-0050569ac2e1&area=met&icaoCode=${localidade}`;
-            const res = await fetch(url);
+            const res = await fetchWithTimeout(url, {}, 4500);
             if (!res.ok) throw new Error('Falha DECEA AISWEB');
             const xmlText = await res.text();
             const match = xmlText.match(/<metar>([\s\S]*?)<\/metar>/i);
@@ -1122,28 +1149,32 @@
 
         async function fetchMetarData(localidade) {
             const isGithubPages = window.location.hostname.endsWith('github.io');
+            const candidates = [fetchFromDeceaAiswebDirect(localidade)];
 
-            // 1. Se estiver rodando localmente (localhost) ou na Vercel, usa o proxy /api/metar
             if (window.location.protocol.startsWith('http') && !isGithubPages) {
-                try {
-                    const resLocal = await fetch(`${METAR_CONFIG.proxyApiUrl}?localidade=${localidade}`, { cache: 'no-store' });
-                    if (resLocal.ok && (resLocal.headers.get('content-type') || '').includes('application/json')) {
-                        return await resLocal.json();
-                    }
-                } catch (e) {}
+                candidates.push(
+                    fetchWithTimeout(`${METAR_CONFIG.proxyApiUrl}?localidade=${localidade}`, { cache: 'no-store' }, 3500)
+                        .then(async r => {
+                            if (!r.ok || !(r.headers.get('content-type') || '').includes('application/json')) throw new Error('Proxy local indisponível');
+                            const j = await r.json();
+                            if (!j.status || !j.data?.data?.length) throw new Error('Sem dados proxy');
+                            try {
+                                localStorage.setItem(`portal_gerente_metar_hist_${localidade}`, JSON.stringify(j.data.data.slice(0, METAR_CONFIG.maxHistorico)));
+                            } catch (e) {}
+                            return j;
+                        })
+                );
             }
 
-            // 2. Conexão direta oficial com a API DECEA AISWEB (possui CORS: * liberado nativamente p/ GitHub Pages)
+            // Dispara em paralelo e retorna imediatamente a fonte que responder primeiro (< 1s)
             try {
-                return await fetchFromDeceaAiswebDirect(localidade);
-            } catch (e) {}
-
-            // 3. Fallback via proxy sem query timestamp (evita erro 520/522 no Cloudflare)
-            const cleanRemote = `${METAR_CONFIG.remoteApiUrl}?localidade=${localidade}`;
-            const resCors = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(cleanRemote)}`);
-            if (resCors.ok) return await resCors.json();
-
-            throw new Error('Não foi possível obter o METAR');
+                return await Promise.any(candidates);
+            } catch (e) {
+                const cleanRemote = `${METAR_CONFIG.remoteApiUrl}?localidade=${localidade}`;
+                const resCors = await fetchWithTimeout(`https://api.allorigins.win/raw?url=${encodeURIComponent(cleanRemote)}`, {}, 6000);
+                if (resCors.ok) return await resCors.json();
+                throw new Error('Não foi possível obter o METAR');
+            }
         }
 
         window.consultarMetar = async function() {
@@ -1273,11 +1304,15 @@
             document.body.classList.add('screen-alert');
 
             sendMetarDesktopNotification();
+            if (!metarState.windowsNotifInterval) {
+                // Re-emite o som nativo de notificação do Windows a cada 12s enquanto não for silenciado
+                metarState.windowsNotifInterval = setInterval(sendMetarDesktopNotification, 12000);
+            }
 
-            // Garante som imediato via sintetizador nativo Web Audio API + MP3
+            // Garante Bip imediato estilo PC-Speaker/Windows + MP3
             playBackupWebAudioBeep();
             if (!metarState.webAudioBeepInterval) {
-                metarState.webAudioBeepInterval = setInterval(playBackupWebAudioBeep, 1500);
+                metarState.webAudioBeepInterval = setInterval(playBackupWebAudioBeep, 1400);
             }
 
             try {
@@ -1293,6 +1328,11 @@
             alertPanel.classList.add('hidden');
             alertPanel.classList.remove('flex');
             document.body.classList.remove('screen-alert');
+
+            if (metarState.windowsNotifInterval) {
+                clearInterval(metarState.windowsNotifInterval);
+                metarState.windowsNotifInterval = null;
+            }
 
             if (activeOsNotification) {
                 try { activeOsNotification.close(); } catch (e) {}
@@ -1794,6 +1834,7 @@
 
             document.addEventListener('click', unlockAudio);
 
+            loadCachedMetarImmediately(METAR_CONFIG.localidade);
             window.consultarMetar();
             if (metarState.consultaAtiva) {
                 metarState.intervalId = setInterval(window.consultarMetar, METAR_CONFIG.intervaloConsulta);
