@@ -1356,13 +1356,32 @@
             }
         };
 
+        function parseMetarUtcTime(rawMens, refDate = new Date()) {
+            const match = (rawMens || '').trim().match(/\b(\d{2})(\d{2})(\d{2})Z\b/);
+            if (!match) return 0;
+            const day = parseInt(match[1], 10);
+            const hour = parseInt(match[2], 10);
+            const minute = parseInt(match[3], 10);
+            const dt = new Date(Date.UTC(refDate.getUTCFullYear(), refDate.getUTCMonth(), day, hour, minute));
+            if (dt.getTime() - refDate.getTime() > 12 * 3600 * 1000) {
+                dt.setUTCMonth(dt.getUTCMonth() - 1);
+            }
+            return dt.getTime();
+        }
+
         function processarRespostaMetar(data) {
             const agora = new Date();
             document.getElementById('lastCheckTime').textContent = agora.toTimeString().split(' ')[0];
-            const todas = data.data.data;
+            const todas = [...(data.data.data || [])].sort((a, b) => {
+                const timeDiff = parseMetarUtcTime(b.mens, agora) - parseMetarUtcTime(a.mens, agora);
+                if (timeDiff !== 0) return timeDiff;
+                const aPriority = a.mens.includes(' COR ') ? 2 : (a.mens.trim().startsWith('SPECI') ? 1 : 0);
+                const bPriority = b.mens.includes(' COR ') ? 2 : (b.mens.trim().startsWith('SPECI') ? 1 : 0);
+                return bPriority - aPriority;
+            });
 
             if (todas.length > 0) {
-                const msgExibir = todas.find(m => m.mens.trim().startsWith('SPECI')) || todas[0];
+                const msgExibir = todas[0];
                 const metarTexto = msgExibir.mens.trim();
                 metarState.ultimoMetarCompleto = metarTexto;
                 document.getElementById('metarRaw').textContent = metarTexto;
