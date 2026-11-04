@@ -371,12 +371,13 @@
                 <!-- ================= MONITOR DE NOTAM (CARROSSEL / SLIDE AISWEB) ================= -->
                 <div class="mt-3.5 pt-3 border-t border-std">
                     <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
-                        <div class="flex items-center gap-2">
+                        <div class="flex flex-wrap items-center gap-1.5">
                             <span class="text-[11px] font-bold uppercase tracking-wider text-amber-500 flex items-center gap-1.5">
                                 <i class="fas fa-triangle-exclamation text-[10px]"></i>
                                 <span id="notamHeaderTitle">NOTAMs Ativos — SBIZ</span>
                             </span>
                             <span id="notamTotalBadge" class="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30 font-mono text-[10px] font-bold">0</span>
+                            <span id="notamActiveWindowSummary" class="hidden px-2 py-0.5 rounded bg-rose-500/25 text-rose-400 border border-rose-500/50 font-mono text-[10px] font-bold animate-pulse"></span>
                             <span id="notamExpiryWarningSummary" class="hidden px-2 py-0.5 rounded bg-rose-500/20 text-rose-400 border border-rose-500/40 font-mono text-[10px] font-bold animate-pulse"></span>
                         </div>
 
@@ -399,8 +400,12 @@
                             <button onclick="window.nextNotamSlide()" class="w-6 h-6 rounded sub-panel flex items-center justify-center hover:opacity-80 transition" title="Próximo NOTAM">
                                 <i class="fas fa-chevron-right text-[10px]"></i>
                             </button>
-                            <button onclick="window.consultarNotam()" class="w-6 h-6 rounded sub-panel flex items-center justify-center hover:opacity-80 transition ml-0.5" title="Atualizar NOTAMs na AISWEB">
+                            <button onclick="window.consultarNotam()" class="w-6 h-6 rounded sub-panel flex items-center justify-center hover:opacity-80 transition" title="Atualizar NOTAMs na AISWEB">
                                 <i id="notamRefreshIcon" class="fas fa-rotate text-[10px] text-amber-500"></i>
+                            </button>
+                            <button onclick="window.openNotamListModal()" class="h-6 px-2 rounded sub-panel flex items-center gap-1 text-[10px] font-semibold text-sec hover:opacity-80 transition" title="Ver lista completa de NOTAMs">
+                                <i class="fas fa-list-ul text-[9px] text-amber-500"></i>
+                                <span>Lista</span>
                             </button>
                         </div>
                     </div>
@@ -461,6 +466,28 @@
                 </div>
             </div>
             <div id="fullScheduleTableContainer" class="p-4 overflow-auto flex-grow"></div>
+        </div>
+    </div>
+
+    <!-- ================= MODAL: LISTA COMPLETA DE NOTAMs ATIVOS ================= -->
+    <div id="notamListModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="panel w-full max-w-4xl max-h-[88vh] flex flex-col overflow-hidden">
+            <div class="p-4 border-b border-std flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-center gap-2.5">
+                    <i class="fas fa-triangle-exclamation text-amber-500"></i>
+                    <h3 class="font-bold text-base" id="notamModalTitle">NOTAMs Ativos — SBIZ</h3>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="window.copyAllNotamsText()" id="copyAllNotamsBtn" class="h-8 px-3 rounded-lg sub-panel text-xs font-semibold text-sec hover:opacity-80 flex items-center gap-1.5 transition">
+                        <i class="far fa-copy text-[11px] text-amber-500"></i>
+                        <span>Copiar Todos</span>
+                    </button>
+                    <button onclick="window.closeNotamListModal()" class="w-8 h-8 rounded-lg sub-panel flex items-center justify-center">
+                        <i class="fas fa-times text-xs"></i>
+                    </button>
+                </div>
+            </div>
+            <div id="notamModalListContainer" class="p-4 overflow-y-auto space-y-3 flex-grow"></div>
         </div>
     </div>
 
@@ -795,6 +822,85 @@
             renderEscalaOfTheDay();
         };
 
+        function getOperatorScheduleInsights(schedule, opName, refColIdx, dayStatuses) {
+            const op = schedule.scheduleData.find(o => o.name === opName);
+            if (!op) return null;
+
+            let countA = 0, countB = 0, countC = 0, countSup = 0, countOff = 0, countLeave = 0;
+            op.shifts.forEach((sh, idx) => {
+                if (dayStatuses[idx] !== 'current') return;
+                const s = (sh || '').trim();
+                const cat = (SHIFT_CONFIG[s] || SHIFT_CONFIG['---']).category;
+                if (s === 'A') countA++;
+                else if (s === 'B') countB++;
+                else if (s === 'C') countC++;
+                else if (cat === 'support') countSup++;
+                else if (cat === 'off') countOff++;
+                else if (cat === 'leave') countLeave++;
+            });
+
+            const shiftNameMap = { A: 'ALFA', B: 'BRAVO', C: 'CHARLIE' };
+            const shiftColorMap = {
+                A: 'text-amber-400',
+                B: 'text-sky-400',
+                C: 'text-indigo-400'
+            };
+
+            let tomorrowLabel = '';
+            let tomorrowColor = 'text-mut';
+            if (refColIdx >= 0 && refColIdx + 1 < op.shifts.length) {
+                const tomShift = (op.shifts[refColIdx + 1] || '---').trim();
+                const tomCfg = SHIFT_CONFIG[tomShift] || SHIFT_CONFIG['---'];
+                if (shiftNameMap[tomShift]) {
+                    tomorrowLabel = `Amanhã: ${shiftNameMap[tomShift]}`;
+                    tomorrowColor = shiftColorMap[tomShift];
+                } else if (tomCfg.category === 'off') {
+                    tomorrowLabel = 'Amanhã: Folga';
+                    tomorrowColor = 'text-mut';
+                } else if (tomCfg.category === 'leave') {
+                    tomorrowLabel = `Amanhã: ${tomShift}`;
+                    tomorrowColor = 'text-rose-400';
+                } else if (tomCfg.category === 'support') {
+                    tomorrowLabel = `Amanhã: ${tomShift}`;
+                    tomorrowColor = 'text-emerald-400';
+                }
+            }
+
+            let nextOpShiftText = 'Sem próx. turno no mês';
+            let nextOpShort = '';
+            if (refColIdx >= 0) {
+                for (let idx = refColIdx + 1; idx < op.shifts.length; idx++) {
+                    const s = (op.shifts[idx] || '---').trim();
+                    if (s === 'A' || s === 'B' || s === 'C') {
+                        const dayNum = String(schedule.dateHeaders[idx]).padStart(2, '0');
+                        const step = idx - refColIdx;
+                        const whenTxt = step === 1 ? 'Amanhã' : `Dia ${dayNum}`;
+                        nextOpShiftText = `Próx. Turno: ${shiftNameMap[s]} (${whenTxt})`;
+                        nextOpShort = step === 1 ? `Amanhã: ${shiftNameMap[s]}` : `Próx: ${shiftNameMap[s]} (${dayNum})`;
+                        break;
+                    }
+                }
+            }
+
+            const totalOp = countA + countB + countC;
+            const tooltip = `${opName} • ${tomorrowLabel || nextOpShiftText} • ${nextOpShiftText} | Mês: ${totalOp} turnos (ALFA: ${countA}, BRAVO: ${countB}, CHARLIE: ${countC}, Folgas: ${countOff})`;
+
+            return {
+                countA,
+                countB,
+                countC,
+                countSup,
+                countOff,
+                countLeave,
+                totalOp,
+                tomorrowLabel,
+                tomorrowColor,
+                nextOpShiftText,
+                nextOpShort,
+                tooltip
+            };
+        }
+
         function renderEscalaOfTheDay() {
             const d = escalaState.selectedDate;
             const today = new Date();
@@ -880,11 +986,19 @@
 
                         <div class="flex-1 flex flex-wrap items-center gap-2 sm:justify-end">
                             ${row.list.length > 0
-                                ? row.list.map(name => `
-                                    <button type="button" onclick="window.openFullScheduleModal('${name.replace(/'/g, "\\'")}')" title="Clique para destacar ${name} na escala mensal" class="px-3.5 py-1.5 rounded-lg border border-std hover:border-sky-500/50 font-semibold text-base sm:text-lg tracking-tight transition cursor-pointer" style="background-color: var(--bg-surface);">
-                                        ${name}
+                                ? row.list.map(name => {
+                                    const info = getOperatorScheduleInsights(schedule, name, targetColIdx, dayStatuses);
+                                    const subTag = info && info.tomorrowLabel
+                                        ? `<span class="block text-[10px] font-mono font-normal ${info.tomorrowColor} leading-tight mt-0.5">${info.tomorrowLabel}</span>`
+                                        : '';
+                                    const tip = info ? info.tooltip : `Clique para destacar ${name} na escala mensal`;
+                                    return `
+                                    <button type="button" onclick="window.openFullScheduleModal('${name.replace(/'/g, "\\'")}')" title="${tip}" class="px-3.5 py-1.5 rounded-lg border border-std hover:border-sky-500/50 font-semibold text-base sm:text-lg tracking-tight transition cursor-pointer text-left sm:text-right" style="background-color: var(--bg-surface);">
+                                        <span class="block leading-tight">${name}</span>
+                                        ${subTag}
                                     </button>
-                                `).join('')
+                                    `;
+                                }).join('')
                                 : `<span class="text-xs text-mut italic">Sem operador</span>`
                             }
                         </div>
@@ -987,14 +1101,21 @@
             }
             leaveBox.innerHTML = leaveHtml;
 
-            // Folgas do dia sempre visível
+            // Folgas do dia sempre visível + indicação do próximo turno
             const offBox = document.getElementById('offListBox');
             if (groups.OFF.length > 0) {
-                offBox.innerHTML = groups.OFF.map(item => `
-                    <button type="button" onclick="window.openFullScheduleModal('${item.name.replace(/'/g, "\\'")}')" class="px-2.5 py-1 rounded border border-sky-500/20 bg-sky-500/10 font-medium text-sec cursor-pointer" title="Clique para ver escala do mês">
-                        ${item.name} <strong class="font-mono text-sky-500 ml-1">${item.shift}</strong>
+                offBox.innerHTML = groups.OFF.map(item => {
+                    const info = getOperatorScheduleInsights(schedule, item.name, targetColIdx, dayStatuses);
+                    const nextHint = info && info.nextOpShort
+                        ? `<span class="text-[10px] font-mono text-mut ml-1">(${info.nextOpShort})</span>`
+                        : '';
+                    const tip = info ? info.tooltip : 'Clique para ver escala do mês';
+                    return `
+                    <button type="button" onclick="window.openFullScheduleModal('${item.name.replace(/'/g, "\\'")}')" class="px-2.5 py-1 rounded border border-sky-500/20 bg-sky-500/10 font-medium text-sec cursor-pointer hover:border-sky-500/50 transition" title="${tip}">
+                        ${item.name} <strong class="font-mono text-sky-500 ml-1">${item.shift}</strong>${nextHint}
                     </button>
-                `).join('');
+                    `;
+                }).join('');
             } else {
                 offBox.innerHTML = `<span class="text-mut italic">Nenhum operador de folga</span>`;
             }
@@ -1611,11 +1732,39 @@
             return { isPerm: false, isEst, date, formatted };
         }
 
-        function getNotamExpiryMeta(notam) {
-            const now = new Date();
+        function getNotamExpiryMeta(notam, now = new Date()) {
             const startInfo = parseNotamDateCode(notam.b);
             const endInfo = parseNotamDateCode(notam.c);
-            const isFuture = startInfo.date && startInfo.date.getTime() > now.getTime();
+            const isFuture = Boolean(startInfo.date && startInfo.date.getTime() > now.getTime());
+
+            // Se o NOTAM AINDA NÃO ENTROU EM VIGOR (data/hora atual é menor que o campo B)
+            if (isFuture) {
+                const diffStartMs = startInfo.date.getTime() - now.getTime();
+                const diffStartHours = diffStartMs / (1000 * 60 * 60);
+                const diffStartDays = Math.ceil(diffStartHours / 24);
+                const pad = n => String(n).padStart(2, '0');
+                const startShort = `${pad(startInfo.date.getUTCDate())}/${pad(startInfo.date.getUTCMonth() + 1)} ${pad(startInfo.date.getUTCHours())}:${pad(startInfo.date.getUTCMinutes())}Z`;
+
+                const startLabel = diffStartHours < 1
+                    ? `📅 Entra em vigor em ${Math.max(1, Math.round(diffStartMs / 60000))} min (${startShort})`
+                    : (diffStartHours <= 48
+                        ? `📅 Entra em vigor em ${Math.ceil(diffStartHours)}h (${startShort})`
+                        : `📅 A entrar em vigor (em ${diffStartDays} dias • ${startShort})`);
+
+                return {
+                    level: 'future',
+                    label: startLabel,
+                    badgeClass: 'bg-indigo-500/15 text-indigo-400 border-indigo-500/35',
+                    borderClass: 'border-l-indigo-500',
+                    // NOTAMs futuros ficam ordenados depois dos NOTAMs já em vigor
+                    sortTime: 9000000000000 + startInfo.date.getTime(),
+                    isAlert: false,
+                    isCritical: false,
+                    isFuture: true,
+                    startFormatted: startInfo.formatted,
+                    endFormatted: endInfo.formatted
+                };
+            }
 
             if (endInfo.isPerm) {
                 return {
@@ -1623,10 +1772,10 @@
                     label: 'PERMANENTE',
                     badgeClass: 'bg-sky-500/15 text-sky-400 border-sky-500/30',
                     borderClass: 'border-l-sky-500',
-                    sortTime: Number.MAX_SAFE_INTEGER,
+                    sortTime: 8000000000000,
                     isAlert: false,
                     isCritical: false,
-                    isFuture,
+                    isFuture: false,
                     startFormatted: startInfo.formatted,
                     endFormatted: endInfo.formatted
                 };
@@ -1638,10 +1787,10 @@
                     label: 'VIGENTE',
                     badgeClass: 'bg-slate-500/15 text-slate-400 border-slate-500/30',
                     borderClass: 'border-l-slate-500',
-                    sortTime: Number.MAX_SAFE_INTEGER - 1,
+                    sortTime: 7900000000000,
                     isAlert: false,
                     isCritical: false,
-                    isFuture,
+                    isFuture: false,
                     startFormatted: startInfo.formatted,
                     endFormatted: endInfo.formatted
                 };
@@ -1660,7 +1809,7 @@
                     sortTime: endInfo.date.getTime(),
                     isAlert: true,
                     isCritical: true,
-                    isFuture,
+                    isFuture: false,
                     startFormatted: startInfo.formatted,
                     endFormatted: endInfo.formatted
                 };
@@ -1678,7 +1827,7 @@
                     sortTime: endInfo.date.getTime(),
                     isAlert: true,
                     isCritical: true,
-                    isFuture,
+                    isFuture: false,
                     startFormatted: startInfo.formatted,
                     endFormatted: endInfo.formatted
                 };
@@ -1693,7 +1842,7 @@
                     sortTime: endInfo.date.getTime(),
                     isAlert: true,
                     isCritical: false,
-                    isFuture,
+                    isFuture: false,
                     startFormatted: startInfo.formatted,
                     endFormatted: endInfo.formatted
                 };
@@ -1708,7 +1857,7 @@
                     sortTime: endInfo.date.getTime(),
                     isAlert: true,
                     isCritical: false,
-                    isFuture,
+                    isFuture: false,
                     startFormatted: startInfo.formatted,
                     endFormatted: endInfo.formatted
                 };
@@ -1716,13 +1865,13 @@
 
             return {
                 level: 'ok',
-                label: `Vigente (${diffDays} dias)`,
+                label: `Vence em ${diffDays} dias`,
                 badgeClass: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
                 borderClass: 'border-l-emerald-500',
                 sortTime: endInfo.date.getTime(),
                 isAlert: false,
                 isCritical: false,
-                isFuture,
+                isFuture: false,
                 startFormatted: startInfo.formatted,
                 endFormatted: endInfo.formatted
             };
@@ -1756,16 +1905,214 @@
             return parsed;
         }
 
+        function doesNotamClauseMatchUtcDate(clauseText, now) {
+            const monthMap = { JAN: 0, FEB: 1, MAR: 2, APR: 3, MAY: 4, JUN: 5, JUL: 6, AUG: 7, SEP: 8, OCT: 9, NOV: 10, DEC: 11 };
+            const dayMap = { SUN: 0, MON: 1, TUE: 2, WED: 3, THU: 4, FRI: 5, SAT: 6 };
+            const utcMonth = now.getUTCMonth();
+            const utcDate = now.getUTCDate();
+            const utcDay = now.getUTCDay();
+
+            // 1. Verifica restrição de dias da semana (SUN..SAT) na cláusula
+            let allowedWeekdays = new Set();
+            const rangeRegex = /\b(SUN|MON|TUE|WED|THU|FRI|SAT)\s*-\s*(SUN|MON|TUE|WED|THU|FRI|SAT)\b/g;
+            let rMatch;
+            while ((rMatch = rangeRegex.exec(clauseText)) !== null) {
+                let cur = dayMap[rMatch[1]];
+                const end = dayMap[rMatch[2]];
+                for (let k = 0; k < 7; k++) {
+                    allowedWeekdays.add(cur);
+                    if (cur === end) break;
+                    cur = (cur + 1) % 7;
+                }
+            }
+            Object.keys(dayMap).forEach(tok => {
+                if (new RegExp(`\\b${tok}\\b`).test(clauseText)) allowedWeekdays.add(dayMap[tok]);
+            });
+            if (allowedWeekdays.size > 0 && !allowedWeekdays.has(utcDay)) {
+                return false;
+            }
+
+            // 2. Verifica se a cláusula especifica meses/dias do calendário (ex: OCT 28, NOV 01-07 09-14, 30-DEC 05)
+            // Remove horários HHMM-HHMM antes de analisar os números de dias do mês
+            const cleanDatesPart = clauseText
+                .replace(/\b\d{4}\s*-\s*\d{4}\b/g, ' ')
+                .replace(/\bH24\b/g, ' ');
+
+            const hasMonthName = /\b(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\b/.test(cleanDatesPart);
+            if (!hasMonthName) {
+                // Verifica intervalos simples de dias do mês atual (ex: 10-15 1100-1500)
+                const simpleDayTokens = cleanDatesPart.match(/\b(\d{1,2})(?:\s*-\s*(\d{1,2}))?\b/g);
+                if (!simpleDayTokens) return true;
+                let matchedDay = false;
+                for (const tok of simpleDayTokens) {
+                    const parts = tok.split('-').map(s => parseInt(s.trim(), 10));
+                    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+                        if (utcDate >= parts[0] && utcDate <= parts[1]) matchedDay = true;
+                    } else if (parts.length === 1 && parts[0] === utcDate) {
+                        matchedDay = true;
+                    }
+                }
+                return matchedDay;
+            }
+
+            // Percorre tokens sequenciais mantendo o mês corrente na cláusula
+            const tokens = cleanDatesPart.trim().split(/\s+/);
+            let currentClauseMonth = null;
+            for (let i = 0; i < tokens.length; i++) {
+                const t = tokens[i];
+                if (monthMap[t] !== undefined) {
+                    currentClauseMonth = monthMap[t];
+                    continue;
+                }
+                if (currentClauseMonth === null) continue;
+
+                // Caso: 30-DEC 05 (virada de mês dentro da cláusula)
+                const crossMonthMatch = t.match(/^(\d{1,2})-(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)$/);
+                if (crossMonthMatch && i + 1 < tokens.length && /^\d{1,2}$/.test(tokens[i + 1])) {
+                    const startD = parseInt(crossMonthMatch[1], 10);
+                    const nextM = monthMap[crossMonthMatch[2]];
+                    const endD = parseInt(tokens[i + 1], 10);
+                    if ((utcMonth === currentClauseMonth && utcDate >= startD) || (utcMonth === nextM && utcDate <= endD)) {
+                        return true;
+                    }
+                    currentClauseMonth = nextM;
+                    i++;
+                    continue;
+                }
+
+                // Caso: intervalo de dias no mês atual da cláusula (ex: 01-07, 09-14)
+                const dayRangeMatch = t.match(/^(\d{1,2})-(\d{1,2})$/);
+                if (dayRangeMatch) {
+                    const sD = parseInt(dayRangeMatch[1], 10);
+                    const eD = parseInt(dayRangeMatch[2], 10);
+                    if (utcMonth === currentClauseMonth && utcDate >= sD && utcDate <= eD) {
+                        return true;
+                    }
+                    continue;
+                }
+
+                // Caso: dia isolado (ex: 28, 29, 31)
+                if (/^\d{1,2}$/.test(t)) {
+                    const dNum = parseInt(t, 10);
+                    if (utcMonth === currentClauseMonth && utcDate === dNum) {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        function evaluateNotamDailyWindow(notam, now = new Date()) {
+            const startInfo = parseNotamDateCode(notam.b);
+            const endInfo = parseNotamDateCode(notam.c);
+            const dRaw = (notam.d || '').trim().toUpperCase();
+
+            // 1. Verifica obrigatoriamente a data/hora de início de vigência (Campo B)
+            if (!startInfo.date || now.getTime() < startInfo.date.getTime()) {
+                return {
+                    state: 'future_period',
+                    label: 'Ainda não entrou em vigor',
+                    badgeHtml: `<span class="px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-400 border border-indigo-500/30 text-[10px] font-semibold">⏸ Ainda não entrou em vigor</span>`
+                };
+            }
+
+            // 2. Verifica se já expirou no Campo C
+            if (!endInfo.isPerm && endInfo.date && now.getTime() > endInfo.date.getTime()) {
+                return { state: 'expired', label: '', badgeHtml: '' };
+            }
+
+            // 3. Se já entrou em vigor (now >= B) e não tem restrição no Campo D, está ativo 24h
+            if (!dRaw) {
+                return {
+                    state: 'continuous',
+                    label: 'Em vigor (24h)',
+                    badgeHtml: `<span class="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[10px] font-mono font-semibold">🟢 Em vigor (24h)</span>`
+                };
+            }
+
+            // 4. Divide o Campo D por vírgulas e avalia apenas a(s) cláusula(s) que correspondem à data UTC de hoje
+            const clauses = dRaw.split(',').map(c => c.trim()).filter(Boolean);
+            const curMin = now.getUTCHours() * 60 + now.getUTCMinutes();
+            let matchingWindowsToday = [];
+            let isH24Today = false;
+
+            for (const clause of clauses) {
+                if (!doesNotamClauseMatchUtcDate(clause, now)) continue;
+                if (/\bH24\b/.test(clause)) {
+                    isH24Today = true;
+                }
+                const timeRegex = /\b(\d{2})(\d{2})\s*-\s*(\d{2})(\d{2})\b/g;
+                let tMatch;
+                while ((tMatch = timeRegex.exec(clause)) !== null) {
+                    const startMin = parseInt(tMatch[1], 10) * 60 + parseInt(tMatch[2], 10);
+                    const endMin = parseInt(tMatch[3], 10) * 60 + parseInt(tMatch[4], 10);
+                    matchingWindowsToday.push({
+                        raw: `${tMatch[1]}${tMatch[2]}-${tMatch[3]}${tMatch[4]}Z`,
+                        startMin,
+                        endMin
+                    });
+                }
+            }
+
+            if (isH24Today) {
+                return {
+                    state: 'active_now',
+                    label: '🔴 EM VIGOR HOJE (H24)',
+                    badgeHtml: `<span class="px-2 py-0.5 rounded bg-rose-500/25 text-rose-400 border border-rose-500/50 text-[10px] font-mono font-bold">🔴 EM VIGOR HOJE (H24)</span>`
+                };
+            }
+
+            if (matchingWindowsToday.length === 0) {
+                return {
+                    state: 'outside_window',
+                    label: '⏸ Fora da Janela Hoje',
+                    badgeHtml: `<span class="px-1.5 py-0.5 rounded bg-slate-500/15 text-slate-400 border border-slate-500/30 text-[10px] font-mono">⏸ Fora da Janela Hoje</span>`
+                };
+            }
+
+            for (const w of matchingWindowsToday) {
+                const inWindow = w.endMin >= w.startMin
+                    ? (curMin >= w.startMin && curMin <= w.endMin)
+                    : (curMin >= w.startMin || curMin <= w.endMin);
+                if (inWindow) {
+                    return {
+                        state: 'active_now',
+                        label: `🔴 EM VIGOR AGORA (${w.raw})`,
+                        badgeHtml: `<span class="px-2 py-0.5 rounded bg-rose-500/25 text-rose-400 border border-rose-500/50 text-[10px] font-mono font-bold animate-pulse">🔴 EM VIGOR AGORA (${w.raw})</span>`
+                    };
+                }
+            }
+
+            for (const w of matchingWindowsToday) {
+                const diffToStart = w.startMin - curMin;
+                if (diffToStart > 0 && diffToStart <= 30) {
+                    return {
+                        state: 'starting_soon',
+                        label: `⏳ JANELA EM ${diffToStart} MIN (${w.raw})`,
+                        badgeHtml: `<span class="px-2 py-0.5 rounded bg-amber-500/25 text-amber-400 border border-amber-500/50 text-[10px] font-mono font-bold animate-pulse">⏳ INICIA EM ${diffToStart} MIN (${w.raw})</span>`
+                    };
+                }
+            }
+
+            return {
+                state: 'outside_window',
+                label: '⏸ Fora do Horário (D)',
+                badgeHtml: `<span class="px-1.5 py-0.5 rounded bg-slate-500/15 text-slate-400 border border-slate-500/30 text-[10px] font-mono">⏸ Fora do Horário (D)</span>`
+            };
+        }
+
         function renderNotamCarousel() {
             const viewport = document.getElementById('notamSlideViewport');
             const totalBadge = document.getElementById('notamTotalBadge');
             const counterEl = document.getElementById('notamSlideCounter');
             const dotsEl = document.getElementById('notamSlideDots');
             const warnSummary = document.getElementById('notamExpiryWarningSummary');
+            const activeWinSummary = document.getElementById('notamActiveWindowSummary');
             const headerTitle = document.getElementById('notamHeaderTitle');
 
             if (!viewport) return;
-            headerTitle.textContent = `NOTAMs Ativos — ${METAR_CONFIG.localidade}`;
+            headerTitle.textContent = `NOTAMs — ${METAR_CONFIG.localidade}`;
 
             const items = notamState.items || [];
             totalBadge.textContent = String(items.length);
@@ -1774,6 +2121,7 @@
                 counterEl.textContent = '0 / 0';
                 dotsEl.innerHTML = '';
                 warnSummary.classList.add('hidden');
+                if (activeWinSummary) activeWinSummary.classList.add('hidden');
                 viewport.className = 'sub-panel p-3.5 border-l-4 border-l-emerald-500 transition-all duration-300 min-h-[118px] flex items-center justify-center';
                 viewport.innerHTML = `<div class="text-xs text-mut italic">Nenhum NOTAM ativo para ${METAR_CONFIG.localidade} na AISWEB.</div>`;
                 return;
@@ -1782,7 +2130,10 @@
             if (notamState.currentIndex >= items.length) notamState.currentIndex = 0;
             if (notamState.currentIndex < 0) notamState.currentIndex = items.length - 1;
 
-            // Resumo de alertas de vencimento próximo no topo do bloco NOTAM
+            // Oculta badge global do cabeçalho para que cada NOTAM exiba seu status apenas no seu próprio slide
+            if (activeWinSummary) activeWinSummary.classList.add('hidden');
+
+            // Resumo de alertas de vencimento próximo no topo do bloco NOTAM (apenas NOTAMs já em vigor)
             const criticalCount = items.filter(it => getNotamExpiryMeta(it).isCritical).length;
             const alertCount = items.filter(it => getNotamExpiryMeta(it).isAlert).length;
 
@@ -1800,16 +2151,14 @@
 
             const current = items[notamState.currentIndex];
             const meta = getNotamExpiryMeta(current);
+            const winMeta = evaluateNotamDailyWindow(current);
             counterEl.textContent = `${notamState.currentIndex + 1} / ${items.length}`;
 
-            viewport.className = `sub-panel p-3.5 border-l-4 ${meta.borderClass} transition-all duration-300 min-h-[118px] flex flex-col justify-between`;
-
-            const futureBadge = meta.isFuture
-                ? `<span class="px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-400 border border-indigo-500/30 text-[10px] font-semibold">Início Futuro</span>`
-                : '';
+            const slideBorder = winMeta.state === 'active_now' ? 'border-l-rose-500' : meta.borderClass;
+            viewport.className = `sub-panel p-3.5 border-l-4 ${slideBorder} transition-all duration-300 min-h-[118px] flex flex-col justify-between`;
 
             const scheduleRow = current.d
-                ? `<div class="mt-1 text-[11px] font-mono text-amber-400"><i class="far fa-clock mr-1"></i>Período (D): <strong>${current.d}</strong></div>`
+                ? `<div class="mt-1 text-[11px] font-mono ${winMeta.state === 'active_now' ? 'text-rose-400 font-bold' : 'text-amber-400'}"><i class="far fa-clock mr-1"></i>Período (D): <strong>${current.d}</strong></div>`
                 : '';
 
             const verticalLimits = (current.f || current.g)
@@ -1826,7 +2175,7 @@
                             <span class="px-1.5 py-0.5 rounded sub-panel text-[10px] font-mono font-semibold text-sec">
                                 ${current.cat || 'GERAL'}${current.tp ? ' • ' + current.tp : ''}
                             </span>
-                            ${futureBadge}
+                            ${winMeta.badgeHtml}
                         </div>
                         <span class="px-2 py-0.5 rounded border text-[11px] font-bold font-mono ${meta.badgeClass}">
                             ${meta.label}
@@ -1847,14 +2196,113 @@
 
             dotsEl.innerHTML = items.map((it, idx) => {
                 const itMeta = getNotamExpiryMeta(it);
+                const itWin = evaluateNotamDailyWindow(it);
                 const isActive = idx === notamState.currentIndex;
                 let dotColor = isActive ? 'bg-amber-500 w-5' : 'bg-slate-500/40 w-2 hover:bg-slate-400';
-                if (itMeta.isCritical) {
+                if (itMeta.isCritical || itWin.state === 'active_now') {
                     dotColor = isActive ? 'bg-rose-500 w-5' : 'bg-rose-500/50 w-2';
                 }
                 return `<button onclick="window.goToNotamSlide(${idx})" class="h-1.5 rounded-full transition-all duration-300 ${dotColor}" title="${it.n}: ${itMeta.label}"></button>`;
             }).join('');
         }
+
+        function formatNotamForCopy(it) {
+            const meta = getNotamExpiryMeta(it);
+            return `${it.n} (${it.cat || 'GERAL'} • ${it.tp || 'NOTAM'})\nB) ${meta.startFormatted} | C) ${meta.endFormatted}${it.d ? `\nD) ${it.d}` : ''}\nE) ${it.e}`;
+        }
+
+        function renderNotamModalList() {
+            const container = document.getElementById('notamModalListContainer');
+            const titleEl = document.getElementById('notamModalTitle');
+            if (!container) return;
+            const items = notamState.items || [];
+            titleEl.textContent = `NOTAMs Ativos — ${METAR_CONFIG.localidade} (${items.length})`;
+
+            if (items.length === 0) {
+                container.innerHTML = `<div class="py-10 text-center text-sm text-mut italic">Nenhum NOTAM ativo encontrado para ${METAR_CONFIG.localidade}.</div>`;
+                return;
+            }
+
+            container.innerHTML = items.map((it, idx) => {
+                const meta = getNotamExpiryMeta(it);
+                const winMeta = evaluateNotamDailyWindow(it);
+                const cardBorder = winMeta.state === 'active_now' ? 'border-l-rose-500' : meta.borderClass;
+                return `
+                    <div class="sub-panel p-4 border-l-4 ${cardBorder}">
+                        <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="font-mono font-bold text-xs px-2.5 py-0.5 rounded border border-std" style="background-color: var(--bg-surface);">
+                                    ${it.n || 'NOTAM'}
+                                </span>
+                                <span class="px-2 py-0.5 rounded sub-panel text-[11px] font-mono font-semibold text-sec">
+                                    ${it.cat || 'GERAL'}${it.tp ? ' • ' + it.tp : ''}${it.cod ? ' • ' + it.cod : ''}
+                                </span>
+                                ${winMeta.badgeHtml}
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="px-2.5 py-0.5 rounded border text-xs font-bold font-mono ${meta.badgeClass}">
+                                    ${meta.label}
+                                </span>
+                                <button onclick="window.copySingleNotamText(${idx}, this)" class="h-7 px-2.5 rounded sub-panel text-[11px] font-semibold text-sec hover:opacity-80 flex items-center gap-1 transition" title="Copiar este NOTAM">
+                                    <i class="far fa-copy text-[10px] text-amber-500"></i>
+                                    <span>Copiar</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="font-mono text-sm font-semibold leading-relaxed break-words select-all py-1.5">
+                            ${it.e || '--'}
+                        </div>
+
+                        ${it.d ? `<div class="mt-1 text-xs font-mono ${winMeta.state === 'active_now' ? 'text-rose-400 font-bold' : 'text-amber-400'}"><i class="far fa-clock mr-1"></i>Período Diário (D): <strong>${it.d}</strong></div>` : ''}
+
+                        <div class="mt-2.5 pt-2 border-t border-std flex flex-wrap items-center justify-between gap-2 text-xs font-mono text-mut">
+                            <span>Início (B): <strong class="text-sec">${meta.startFormatted}</strong></span>
+                            <span>Vencimento (C): <strong class="${meta.isCritical ? 'text-rose-400' : (meta.isAlert ? 'text-amber-400' : 'text-sec')}">${meta.endFormatted}</strong></span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        window.openNotamListModal = function() {
+            renderNotamModalList();
+            const modal = document.getElementById('notamListModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        };
+
+        window.closeNotamListModal = function() {
+            const modal = document.getElementById('notamListModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        };
+
+        window.copySingleNotamText = function(idx, btnEl) {
+            const it = notamState.items[idx];
+            if (!it) return;
+            navigator.clipboard.writeText(formatNotamForCopy(it)).then(() => {
+                if (btnEl) {
+                    const orig = btnEl.innerHTML;
+                    btnEl.innerHTML = `<i class="fas fa-check text-[10px] text-emerald-500"></i><span class="text-emerald-400">Copiado!</span>`;
+                    setTimeout(() => { btnEl.innerHTML = orig; }, 1600);
+                }
+            }).catch(() => {});
+        };
+
+        window.copyAllNotamsText = function() {
+            const items = notamState.items || [];
+            if (items.length === 0) return;
+            const fullText = items.map(formatNotamForCopy).join('\n\n----------------------------------------\n\n');
+            const btn = document.getElementById('copyAllNotamsBtn');
+            navigator.clipboard.writeText(fullText).then(() => {
+                if (btn) {
+                    const orig = btn.innerHTML;
+                    btn.innerHTML = `<i class="fas fa-check text-[11px] text-emerald-500"></i><span class="text-emerald-400">Todos Copiados!</span>`;
+                    setTimeout(() => { btn.innerHTML = orig; }, 1800);
+                }
+            }).catch(() => {});
+        };
 
         function startNotamSlideTimer() {
             if (notamState.slideTimer) clearInterval(notamState.slideTimer);
@@ -1913,6 +2361,7 @@
             try {
                 const cached = JSON.parse(localStorage.getItem(`portal_gerente_notam_cache_${localidade}`) || 'null');
                 if (cached && Array.isArray(cached)) {
+                    cached.sort((a, b) => getNotamExpiryMeta(a).sortTime - getNotamExpiryMeta(b).sortTime);
                     notamState.items = cached;
                     notamState.currentIndex = 0;
                     renderNotamCarousel();
@@ -2112,22 +2561,22 @@
                 ? schedule.scheduleData.filter(op => op.name.toLowerCase().includes(q))
                 : schedule.scheduleData;
 
+            let todayColIdx = -1;
+            for (let i = 0; i < schedule.dateHeaders.length; i++) {
+                const colDate = getColumnDateObject(schedule, i, dayStatuses);
+                if (colDate.getTime() === today.getTime()) {
+                    todayColIdx = i;
+                    break;
+                }
+            }
+
             if (q && matchedOps.length === 1) {
                 const op = matchedOps[0];
-                let countA = 0, countB = 0, countC = 0, countSup = 0, countLeave = 0, countOff = 0;
-                op.shifts.forEach((sh, idx) => {
-                    if (dayStatuses[idx] !== 'current') return;
-                    const s = (sh || '').trim();
-                    const cat = (SHIFT_CONFIG[s] || SHIFT_CONFIG['---']).category;
-                    if (s === 'A') countA++;
-                    else if (s === 'B') countB++;
-                    else if (s === 'C') countC++;
-                    else if (cat === 'support') countSup++;
-                    else if (cat === 'leave') countLeave++;
-                    else if (cat === 'off') countOff++;
-                });
-                summaryEl.textContent = `${op.name}: ALFA(${countA}) • BRAVO(${countB}) • CHARLIE(${countC}) • ADM/SE(${countSup}) • Folgas(${countOff}) • Férias/Lic(${countLeave})`;
-                summaryEl.classList.remove('hidden');
+                const info = getOperatorScheduleInsights(schedule, op.name, todayColIdx, dayStatuses);
+                if (info) {
+                    summaryEl.textContent = `${op.name}: ${info.nextOpShiftText} • Total Turnos(${info.totalOp}) [ALFA:${info.countA} • BRAVO:${info.countB} • CHARLIE:${info.countC}] • Folgas(${info.countOff}) • Férias/Lic(${info.countLeave})`;
+                    summaryEl.classList.remove('hidden');
+                }
             } else {
                 summaryEl.classList.add('hidden');
             }
@@ -2143,12 +2592,18 @@
                                 const isCurrent = dayStatuses[idx] === 'current';
                                 return `<th class="p-2 text-center min-w-[34px] ${isToday ? 'bg-emerald-500/20 text-emerald-400 font-bold' : ''} ${!isCurrent ? 'opacity-30' : ''}">${day}</th>`;
                             }).join('')}
+                            <th class="p-2 text-center font-mono font-bold text-amber-500 border-l border-std" title="Turnos ALFA no mês">A</th>
+                            <th class="p-2 text-center font-mono font-bold text-sky-500" title="Turnos BRAVO no mês">B</th>
+                            <th class="p-2 text-center font-mono font-bold text-indigo-500" title="Turnos CHARLIE no mês">C</th>
+                            <th class="p-2 text-center font-mono font-bold text-emerald-400" title="Total de turnos operacionais (A+B+C) no mês">Total</th>
+                            <th class="p-2 text-center font-mono font-bold text-sec" title="Total de Folgas no mês">Folgas</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y border-std">
                         ${schedule.scheduleData.map(op => {
                             const isMatch = !q || op.name.toLowerCase().includes(q);
                             const isExactFocus = q && op.name.toLowerCase().includes(q);
+                            const info = getOperatorScheduleInsights(schedule, op.name, todayColIdx, dayStatuses);
                             return `
                             <tr onclick="window.toggleModalOperatorFocus('${op.name.replace(/'/g, "\\'")}')" class="cursor-pointer transition ${isExactFocus ? 'ring-1 ring-emerald-500/60 bg-emerald-500/5' : ''} ${!isMatch ? 'opacity-20' : 'hover:opacity-90'}">
                                 <td class="p-2 font-semibold whitespace-nowrap sticky left-0 z-10" style="background-color: var(--bg-surface);">
@@ -2159,6 +2614,11 @@
                                     const cellClass = getModalShiftCellClass(shift);
                                     return `<td class="p-1.5 text-center font-mono ${cellClass} ${!isCurrent ? 'opacity-25' : ''}">${shift}</td>`;
                                 }).join('')}
+                                <td class="p-1.5 text-center font-mono font-bold text-amber-400 border-l border-std">${info ? info.countA : 0}</td>
+                                <td class="p-1.5 text-center font-mono font-bold text-sky-400">${info ? info.countB : 0}</td>
+                                <td class="p-1.5 text-center font-mono font-bold text-indigo-400">${info ? info.countC : 0}</td>
+                                <td class="p-1.5 text-center font-mono font-bold text-emerald-400 bg-emerald-500/5">${info ? info.totalOp : 0}</td>
+                                <td class="p-1.5 text-center font-mono text-sec">${info ? info.countOff : 0}</td>
                             </tr>
                             `;
                         }).join('')}
