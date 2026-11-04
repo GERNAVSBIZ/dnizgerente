@@ -355,17 +355,63 @@
                     </div>
                 </div>
 
-                <!-- Histórico de Mensagens METAR/SPECI -->
-                <div class="pt-3 border-t border-std">
-                    <div class="flex items-center justify-between mb-2">
+                <!-- Histórico de Mensagens METAR/SPECI (Compacto: 2 mensagens + barra de rolagem) -->
+                <div class="pt-2.5 border-t border-std">
+                    <div class="flex items-center justify-between mb-1.5">
                         <span class="text-[11px] font-semibold uppercase tracking-wider text-mut">Histórico de Mensagens</span>
                         <a href="https://metargeral.vercel.app/metar_relatorio.html" target="_blank" class="text-xs font-medium text-sky-500 hover:underline">
                             Relatórios PDF <i class="fas fa-arrow-up-right-from-square text-[10px] ml-0.5"></i>
                         </a>
                     </div>
-                    <div id="historyContainer" class="space-y-1.5 font-mono text-xs text-sec max-h-[145px] overflow-y-auto pr-1">
+                    <div id="historyContainer" class="space-y-1 font-mono text-xs text-sec max-h-[62px] overflow-y-auto pr-1">
                         <div class="text-mut font-sans">Nenhum histórico disponível</div>
                     </div>
+                </div>
+
+                <!-- ================= MONITOR DE NOTAM (CARROSSEL / SLIDE AISWEB) ================= -->
+                <div class="mt-3.5 pt-3 border-t border-std">
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                        <div class="flex items-center gap-2">
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-amber-500 flex items-center gap-1.5">
+                                <i class="fas fa-triangle-exclamation text-[10px]"></i>
+                                <span id="notamHeaderTitle">NOTAMs Ativos — SBIZ</span>
+                            </span>
+                            <span id="notamTotalBadge" class="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30 font-mono text-[10px] font-bold">0</span>
+                            <span id="notamExpiryWarningSummary" class="hidden px-2 py-0.5 rounded bg-rose-500/20 text-rose-400 border border-rose-500/40 font-mono text-[10px] font-bold animate-pulse"></span>
+                        </div>
+
+                        <div class="flex items-center gap-1.5">
+                            <span id="notamSlideCounter" class="text-[11px] font-mono text-mut mr-0.5">0 / 0</span>
+                            <select id="notamSpeedSelect" onchange="window.changeNotamSlideSpeed(this.value)" class="h-6 px-1.5 rounded sub-panel text-[10px] font-mono text-sec focus:outline-none cursor-pointer" title="Tempo de passagem de cada slide NOTAM">
+                                <option value="4000">4s</option>
+                                <option value="7000" selected>7s</option>
+                                <option value="10000">10s</option>
+                                <option value="15000">15s</option>
+                                <option value="20000">20s</option>
+                                <option value="30000">30s</option>
+                            </select>
+                            <button onclick="window.prevNotamSlide()" class="w-6 h-6 rounded sub-panel flex items-center justify-center hover:opacity-80 transition" title="NOTAM anterior">
+                                <i class="fas fa-chevron-left text-[10px]"></i>
+                            </button>
+                            <button onclick="window.toggleNotamAutoSlide()" id="notamPauseBtn" class="w-6 h-6 rounded sub-panel flex items-center justify-center hover:opacity-80 transition" title="Pausar/Retomar rotação automática">
+                                <i id="notamPauseIcon" class="fas fa-pause text-[9px] text-amber-500"></i>
+                            </button>
+                            <button onclick="window.nextNotamSlide()" class="w-6 h-6 rounded sub-panel flex items-center justify-center hover:opacity-80 transition" title="Próximo NOTAM">
+                                <i class="fas fa-chevron-right text-[10px]"></i>
+                            </button>
+                            <button onclick="window.consultarNotam()" class="w-6 h-6 rounded sub-panel flex items-center justify-center hover:opacity-80 transition ml-0.5" title="Atualizar NOTAMs na AISWEB">
+                                <i id="notamRefreshIcon" class="fas fa-rotate text-[10px] text-amber-500"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Slide do NOTAM Atual -->
+                    <div id="notamSlideViewport" onmouseenter="window.setNotamHoverPause(true)" onmouseleave="window.setNotamHoverPause(false)" class="sub-panel p-3.5 border-l-4 border-l-amber-500 transition-all duration-300 min-h-[118px] flex flex-col justify-between">
+                        <div class="text-xs text-mut italic py-4 text-center">Consultando NOTAMs na AISWEB...</div>
+                    </div>
+
+                    <!-- Indicadores de Slide (Bolinhas) -->
+                    <div id="notamSlideDots" class="flex items-center justify-center gap-1.5 mt-2"></div>
                 </div>
             </section>
 
@@ -1531,6 +1577,381 @@
         }
 
         // =========================================================================
+        // 3.5 MONITOR DE NOTAM (AISWEB) — CARROSSEL / SLIDE + ALERTA DE VENCIMENTO
+        // =========================================================================
+        const notamState = {
+            items: [],
+            currentIndex: 0,
+            autoSlide: true,
+            hoverPaused: false,
+            slideTimer: null,
+            slideIntervalMs: 7000,
+            refreshTimer: null
+        };
+
+        function parseNotamDateCode(rawCode) {
+            const code = (rawCode || '').trim().toUpperCase();
+            if (!code) return { isPerm: false, isEst: false, date: null, formatted: '--' };
+            if (code.includes('PERM')) {
+                return { isPerm: true, isEst: false, date: null, formatted: 'PERMANENTE' };
+            }
+            const isEst = code.includes('EST');
+            const digits = code.replace(/\D/g, '');
+            if (digits.length < 10) {
+                return { isPerm: false, isEst, date: null, formatted: code };
+            }
+            const year = 2000 + parseInt(digits.slice(0, 2), 10);
+            const month = parseInt(digits.slice(2, 4), 10) - 1;
+            const day = parseInt(digits.slice(4, 6), 10);
+            const hour = parseInt(digits.slice(6, 8), 10);
+            const minute = parseInt(digits.slice(8, 10), 10);
+            const date = new Date(Date.UTC(year, month, day, hour, minute));
+            const pad = n => String(n).padStart(2, '0');
+            const formatted = `${pad(day)}/${pad(month + 1)}/${year} ${pad(hour)}:${pad(minute)}Z${isEst ? ' (EST)' : ''}`;
+            return { isPerm: false, isEst, date, formatted };
+        }
+
+        function getNotamExpiryMeta(notam) {
+            const now = new Date();
+            const startInfo = parseNotamDateCode(notam.b);
+            const endInfo = parseNotamDateCode(notam.c);
+            const isFuture = startInfo.date && startInfo.date.getTime() > now.getTime();
+
+            if (endInfo.isPerm) {
+                return {
+                    level: 'perm',
+                    label: 'PERMANENTE',
+                    badgeClass: 'bg-sky-500/15 text-sky-400 border-sky-500/30',
+                    borderClass: 'border-l-sky-500',
+                    sortTime: Number.MAX_SAFE_INTEGER,
+                    isAlert: false,
+                    isCritical: false,
+                    isFuture,
+                    startFormatted: startInfo.formatted,
+                    endFormatted: endInfo.formatted
+                };
+            }
+
+            if (!endInfo.date || isNaN(endInfo.date.getTime())) {
+                return {
+                    level: 'unknown',
+                    label: 'VIGENTE',
+                    badgeClass: 'bg-slate-500/15 text-slate-400 border-slate-500/30',
+                    borderClass: 'border-l-slate-500',
+                    sortTime: Number.MAX_SAFE_INTEGER - 1,
+                    isAlert: false,
+                    isCritical: false,
+                    isFuture,
+                    startFormatted: startInfo.formatted,
+                    endFormatted: endInfo.formatted
+                };
+            }
+
+            const diffMs = endInfo.date.getTime() - now.getTime();
+            const diffHours = diffMs / (1000 * 60 * 60);
+            const diffDays = Math.ceil(diffHours / 24);
+
+            if (diffMs <= 0) {
+                return {
+                    level: 'expired',
+                    label: '🚨 VENCIDO / EXPIRADO',
+                    badgeClass: 'bg-rose-500/25 text-rose-400 border-rose-500/50 animate-pulse',
+                    borderClass: 'border-l-rose-500',
+                    sortTime: endInfo.date.getTime(),
+                    isAlert: true,
+                    isCritical: true,
+                    isFuture,
+                    startFormatted: startInfo.formatted,
+                    endFormatted: endInfo.formatted
+                };
+            }
+
+            if (diffHours <= 48) {
+                const timeTxt = diffHours < 1
+                    ? `${Math.max(1, Math.round(diffMs / 60000))} min`
+                    : `${Math.ceil(diffHours)}h`;
+                return {
+                    level: 'critical',
+                    label: `🚨 VENCE EM ${timeTxt}${endInfo.isEst ? ' (EST)' : ''}`,
+                    badgeClass: 'bg-rose-500/25 text-rose-400 border-rose-500/50 animate-pulse',
+                    borderClass: 'border-l-rose-500',
+                    sortTime: endInfo.date.getTime(),
+                    isAlert: true,
+                    isCritical: true,
+                    isFuture,
+                    startFormatted: startInfo.formatted,
+                    endFormatted: endInfo.formatted
+                };
+            }
+
+            if (diffDays <= 7) {
+                return {
+                    level: 'warning',
+                    label: `⚠️ VENCE EM ${diffDays} DIAS${endInfo.isEst ? ' (EST)' : ''}`,
+                    badgeClass: 'bg-amber-500/20 text-amber-400 border-amber-500/45 animate-pulse',
+                    borderClass: 'border-l-amber-500',
+                    sortTime: endInfo.date.getTime(),
+                    isAlert: true,
+                    isCritical: false,
+                    isFuture,
+                    startFormatted: startInfo.formatted,
+                    endFormatted: endInfo.formatted
+                };
+            }
+
+            if (diffDays <= 15) {
+                return {
+                    level: 'notice',
+                    label: `⏳ Vence em ${diffDays} dias`,
+                    badgeClass: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+                    borderClass: 'border-l-amber-500',
+                    sortTime: endInfo.date.getTime(),
+                    isAlert: true,
+                    isCritical: false,
+                    isFuture,
+                    startFormatted: startInfo.formatted,
+                    endFormatted: endInfo.formatted
+                };
+            }
+
+            return {
+                level: 'ok',
+                label: `Vigente (${diffDays} dias)`,
+                badgeClass: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+                borderClass: 'border-l-emerald-500',
+                sortTime: endInfo.date.getTime(),
+                isAlert: false,
+                isCritical: false,
+                isFuture,
+                startFormatted: startInfo.formatted,
+                endFormatted: endInfo.formatted
+            };
+        }
+
+        function parseAiswebNotamXml(xmlText) {
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+            const itemNodes = Array.from(xmlDoc.querySelectorAll('notam > item, item'));
+            const getTag = (node, tag) => (node.querySelector(tag)?.textContent || '').trim();
+
+            const parsed = itemNodes.map(node => ({
+                id: getTag(node, 'id') || node.getAttribute('id') || '',
+                n: getTag(node, 'n'),
+                tp: getTag(node, 'tp'),
+                cat: getTag(node, 'cat'),
+                cod: getTag(node, 'cod'),
+                status: getTag(node, 'status'),
+                loc: getTag(node, 'loc') || getTag(node, 'icaoairport_id'),
+                b: getTag(node, 'b'),
+                c: getTag(node, 'c'),
+                d: getTag(node, 'd'),
+                e: getTag(node, 'e'),
+                f: getTag(node, 'f'),
+                g: getTag(node, 'g'),
+                dt: getTag(node, 'dt')
+            })).filter(item => item.n || item.e);
+
+            // Ordena pelos mais próximos do vencimento primeiro
+            parsed.sort((a, b) => getNotamExpiryMeta(a).sortTime - getNotamExpiryMeta(b).sortTime);
+            return parsed;
+        }
+
+        function renderNotamCarousel() {
+            const viewport = document.getElementById('notamSlideViewport');
+            const totalBadge = document.getElementById('notamTotalBadge');
+            const counterEl = document.getElementById('notamSlideCounter');
+            const dotsEl = document.getElementById('notamSlideDots');
+            const warnSummary = document.getElementById('notamExpiryWarningSummary');
+            const headerTitle = document.getElementById('notamHeaderTitle');
+
+            if (!viewport) return;
+            headerTitle.textContent = `NOTAMs Ativos — ${METAR_CONFIG.localidade}`;
+
+            const items = notamState.items || [];
+            totalBadge.textContent = String(items.length);
+
+            if (items.length === 0) {
+                counterEl.textContent = '0 / 0';
+                dotsEl.innerHTML = '';
+                warnSummary.classList.add('hidden');
+                viewport.className = 'sub-panel p-3.5 border-l-4 border-l-emerald-500 transition-all duration-300 min-h-[118px] flex items-center justify-center';
+                viewport.innerHTML = `<div class="text-xs text-mut italic">Nenhum NOTAM ativo para ${METAR_CONFIG.localidade} na AISWEB.</div>`;
+                return;
+            }
+
+            if (notamState.currentIndex >= items.length) notamState.currentIndex = 0;
+            if (notamState.currentIndex < 0) notamState.currentIndex = items.length - 1;
+
+            // Resumo de alertas de vencimento próximo no topo do bloco NOTAM
+            const criticalCount = items.filter(it => getNotamExpiryMeta(it).isCritical).length;
+            const alertCount = items.filter(it => getNotamExpiryMeta(it).isAlert).length;
+
+            if (criticalCount > 0) {
+                warnSummary.textContent = `🚨 ${criticalCount} vence${criticalCount > 1 ? 'm' : ''} em < 48h`;
+                warnSummary.className = 'px-2 py-0.5 rounded bg-rose-500/20 text-rose-400 border border-rose-500/40 font-mono text-[10px] font-bold animate-pulse cursor-pointer';
+                warnSummary.onclick = () => window.goToNotamSlide(0);
+            } else if (alertCount > 0) {
+                warnSummary.textContent = `⚠️ ${alertCount} próx. vencimento`;
+                warnSummary.className = 'px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/40 font-mono text-[10px] font-bold cursor-pointer';
+                warnSummary.onclick = () => window.goToNotamSlide(0);
+            } else {
+                warnSummary.classList.add('hidden');
+            }
+
+            const current = items[notamState.currentIndex];
+            const meta = getNotamExpiryMeta(current);
+            counterEl.textContent = `${notamState.currentIndex + 1} / ${items.length}`;
+
+            viewport.className = `sub-panel p-3.5 border-l-4 ${meta.borderClass} transition-all duration-300 min-h-[118px] flex flex-col justify-between`;
+
+            const futureBadge = meta.isFuture
+                ? `<span class="px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-400 border border-indigo-500/30 text-[10px] font-semibold">Início Futuro</span>`
+                : '';
+
+            const scheduleRow = current.d
+                ? `<div class="mt-1 text-[11px] font-mono text-amber-400"><i class="far fa-clock mr-1"></i>Período (D): <strong>${current.d}</strong></div>`
+                : '';
+
+            const verticalLimits = (current.f || current.g)
+                ? `<span class="ml-2 text-[10px] font-mono text-mut">• Limites: ${current.f || 'SFC'} / ${current.g || 'UNL'}</span>`
+                : '';
+
+            viewport.innerHTML = `
+                <div>
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+                        <div class="flex flex-wrap items-center gap-1.5">
+                            <span class="font-mono font-bold text-xs px-2 py-0.5 rounded border border-std" style="background-color: var(--bg-surface);">
+                                ${current.n || 'NOTAM'}
+                            </span>
+                            <span class="px-1.5 py-0.5 rounded sub-panel text-[10px] font-mono font-semibold text-sec">
+                                ${current.cat || 'GERAL'}${current.tp ? ' • ' + current.tp : ''}
+                            </span>
+                            ${futureBadge}
+                        </div>
+                        <span class="px-2 py-0.5 rounded border text-[11px] font-bold font-mono ${meta.badgeClass}">
+                            ${meta.label}
+                        </span>
+                    </div>
+
+                    <div class="font-mono text-xs sm:text-sm font-semibold leading-snug break-words select-all py-1">
+                        ${current.e || '--'}
+                    </div>
+                    ${scheduleRow}
+                </div>
+
+                <div class="mt-2 pt-2 border-t border-std flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-mut">
+                    <span>Início (B): <strong class="text-sec">${meta.startFormatted}</strong></span>
+                    <span>Vencimento (C): <strong class="${meta.isCritical ? 'text-rose-400' : (meta.isAlert ? 'text-amber-400' : 'text-sec')}">${meta.endFormatted}</strong>${verticalLimits}</span>
+                </div>
+            `;
+
+            dotsEl.innerHTML = items.map((it, idx) => {
+                const itMeta = getNotamExpiryMeta(it);
+                const isActive = idx === notamState.currentIndex;
+                let dotColor = isActive ? 'bg-amber-500 w-5' : 'bg-slate-500/40 w-2 hover:bg-slate-400';
+                if (itMeta.isCritical) {
+                    dotColor = isActive ? 'bg-rose-500 w-5' : 'bg-rose-500/50 w-2';
+                }
+                return `<button onclick="window.goToNotamSlide(${idx})" class="h-1.5 rounded-full transition-all duration-300 ${dotColor}" title="${it.n}: ${itMeta.label}"></button>`;
+            }).join('');
+        }
+
+        function startNotamSlideTimer() {
+            if (notamState.slideTimer) clearInterval(notamState.slideTimer);
+            notamState.slideTimer = setInterval(() => {
+                if (!notamState.autoSlide || notamState.hoverPaused || notamState.items.length <= 1) return;
+                notamState.currentIndex = (notamState.currentIndex + 1) % notamState.items.length;
+                renderNotamCarousel();
+            }, notamState.slideIntervalMs);
+        }
+
+        window.nextNotamSlide = function() {
+            if (notamState.items.length === 0) return;
+            notamState.currentIndex = (notamState.currentIndex + 1) % notamState.items.length;
+            renderNotamCarousel();
+            startNotamSlideTimer();
+        };
+
+        window.prevNotamSlide = function() {
+            if (notamState.items.length === 0) return;
+            notamState.currentIndex = (notamState.currentIndex - 1 + notamState.items.length) % notamState.items.length;
+            renderNotamCarousel();
+            startNotamSlideTimer();
+        };
+
+        window.goToNotamSlide = function(idx) {
+            if (idx < 0 || idx >= notamState.items.length) return;
+            notamState.currentIndex = idx;
+            renderNotamCarousel();
+            startNotamSlideTimer();
+        };
+
+        window.toggleNotamAutoSlide = function() {
+            notamState.autoSlide = !notamState.autoSlide;
+            const icon = document.getElementById('notamPauseIcon');
+            if (icon) {
+                icon.className = notamState.autoSlide
+                    ? 'fas fa-pause text-[9px] text-amber-500'
+                    : 'fas fa-play text-[9px] text-emerald-500';
+            }
+        };
+
+        window.setNotamHoverPause = function(paused) {
+            notamState.hoverPaused = Boolean(paused);
+        };
+
+        window.changeNotamSlideSpeed = function(msVal) {
+            const ms = parseInt(msVal, 10);
+            if (!isNaN(ms) && ms >= 2000) {
+                notamState.slideIntervalMs = ms;
+                localStorage.setItem('portal_gerente_notam_speed', String(ms));
+                startNotamSlideTimer();
+            }
+        };
+
+        function loadCachedNotamsImmediately(localidade) {
+            try {
+                const cached = JSON.parse(localStorage.getItem(`portal_gerente_notam_cache_${localidade}`) || 'null');
+                if (cached && Array.isArray(cached)) {
+                    notamState.items = cached;
+                    notamState.currentIndex = 0;
+                    renderNotamCarousel();
+                }
+            } catch (e) {}
+        }
+
+        window.consultarNotam = async function() {
+            const localidade = METAR_CONFIG.localidade;
+            const spin = document.getElementById('notamRefreshIcon');
+            if (spin) spin.classList.add('fa-spin');
+
+            try {
+                const url = `https://api.decea.mil.br/aisweb/?apiKey=1993294556&apiPass=034a940f-27c0-11f1-a4e0-0050569ac2e1&area=notam&icaoCode=${localidade}`;
+                const res = await fetchWithTimeout(url, {}, 7000);
+                if (!res.ok) throw new Error('Falha ao consultar NOTAM AISWEB');
+                const xmlText = await res.text();
+                const items = parseAiswebNotamXml(xmlText);
+                notamState.items = items;
+                if (notamState.currentIndex >= items.length) notamState.currentIndex = 0;
+
+                try {
+                    localStorage.setItem(`portal_gerente_notam_cache_${localidade}`, JSON.stringify(items));
+                } catch (e) {}
+
+                renderNotamCarousel();
+            } catch (e) {
+                if (notamState.items.length === 0) {
+                    const viewport = document.getElementById('notamSlideViewport');
+                    if (viewport) {
+                        viewport.innerHTML = `<div class="text-xs text-rose-400 italic py-3 text-center">Não foi possível atualizar os NOTAMs da AISWEB no momento.</div>`;
+                    }
+                }
+            } finally {
+                if (spin) spin.classList.remove('fa-spin');
+            }
+        };
+
+        // =========================================================================
         // 4. PORTAIS E SISTEMAS OFICIAIS ABAIXO (VISUAL LIMPO E SÓBRIO)
         // =========================================================================
         const defaultDniSystems = [
@@ -1919,6 +2340,7 @@
         window.addEventListener('online', () => {
             setNetworkBannerState(true);
             window.consultarMetar();
+            window.consultarNotam();
         });
 
         window.addEventListener('offline', () => {
@@ -1984,6 +2406,10 @@
                 metarState.metarHoraAtualEncontrado = false;
                 desativarAlerta();
                 window.consultarMetar();
+                notamState.items = [];
+                notamState.currentIndex = 0;
+                loadCachedNotamsImmediately(v);
+                window.consultarNotam();
             });
 
             document.getElementById('aerodromoInput').addEventListener('keypress', e => {
@@ -2013,6 +2439,18 @@
             setInterval(verificarHoraCheia, 1000);
             setInterval(atualizarContagemRegressiva, 1000);
             setInterval(calculateMetarAge, 60000);
+
+            const savedNotamSpeed = parseInt(localStorage.getItem('portal_gerente_notam_speed') || '7000', 10);
+            if (!isNaN(savedNotamSpeed) && savedNotamSpeed >= 2000) {
+                notamState.slideIntervalMs = savedNotamSpeed;
+                const speedSelect = document.getElementById('notamSpeedSelect');
+                if (speedSelect) speedSelect.value = String(savedNotamSpeed);
+            }
+
+            loadCachedNotamsImmediately(METAR_CONFIG.localidade);
+            window.consultarNotam();
+            startNotamSlideTimer();
+            notamState.refreshTimer = setInterval(window.consultarNotam, 10 * 60 * 1000);
 
             loadAllSchedulesFromFirebase();
             subscribeAlteracaoHorarioRequests();
