@@ -817,6 +817,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, getDocs, setDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // =========================================================================
@@ -900,9 +901,19 @@
             appId: "1:1041766921768:web:bd372feea172476bd1a71d"
         };
 
-        const dbNovo = getFirestore(initializeApp(firebaseConfigNovo, "escalaNovo"));
-        const dbOriginal = getFirestore(initializeApp(firebaseConfigOriginal, "escalaOriginal"));
-        const dbAlteracao = getFirestore(initializeApp(firebaseConfigAlteracao, "alteracaoHorario"));
+        const appNovo = initializeApp(firebaseConfigNovo, "escalaNovo");
+        const appOriginal = initializeApp(firebaseConfigOriginal, "escalaOriginal");
+        const appAlteracao = initializeApp(firebaseConfigAlteracao, "alteracaoHorario");
+
+        const dbNovo = getFirestore(appNovo);
+        const dbOriginal = getFirestore(appOriginal);
+        const dbAlteracao = getFirestore(appAlteracao);
+
+        // Autenticação anônima automática para liberar gravação no Firestore em todas as máquinas
+        const authReadyPromise = Promise.allSettled([
+            signInAnonymously(getAuth(appNovo)),
+            signInAnonymously(getAuth(appOriginal))
+        ]);
 
         let alteracaoRequestsList = [];
 
@@ -1967,16 +1978,27 @@
             document.getElementById('serviceTripForm').reset();
         };
 
-        async function syncTripToFirebase(trip) {
+        async function pushAllServiceTripsToCloud() {
+            await authReadyPromise;
+            const payload = {
+                portalGerenteServiceTrips: serviceTripsState.trips,
+                portalGerenteDeletedTrips: Array.from(serviceTripsState.deletedIds),
+                portalGerenteTripsUpdatedAt: Date.now()
+            };
             try {
-                await setDoc(doc(dbNovo, `artifacts/${firebaseConfigNovo.projectId}/service_trips`, trip.id), trip);
+                await setDoc(doc(dbNovo, `artifacts/${firebaseConfigNovo.projectId}/schedules`, 'config_units'), payload, { merge: true });
+            } catch (e) {}
+            try {
+                await setDoc(doc(dbOriginal, `artifacts/${firebaseConfigOriginal.projectId}/schedules`, 'config_units'), payload, { merge: true });
             } catch (e) {}
         }
 
-        async function deleteTripFromFirebase(tripId) {
-            try {
-                await deleteDoc(doc(dbNovo, `artifacts/${firebaseConfigNovo.projectId}/service_trips`, tripId));
-            } catch (e) {}
+        async function syncTripToFirebase() {
+            await pushAllServiceTripsToCloud();
+        }
+
+        async function deleteTripFromFirebase() {
+            await pushAllServiceTripsToCloud();
         }
 
         window.saveServiceTrip = function(e) {
@@ -2041,30 +2063,50 @@
             deleteTripFromFirebase(tripId);
         };
 
-        function subscribeServiceTripsFromFirebase() {
+        async function subscribeServiceTripsFromFirebase() {
+            await authReadyPromise;
+            const mergeRemoteTripsSnapshot = (docSnap) => {
+                if (!docSnap.exists()) {
+                    if (serviceTripsState.trips.length > 0) pushAllServiceTripsToCloud();
+                    return;
+                }
+                const data = docSnap.data() || {};
+                const remoteTrips = Array.isArray(data.portalGerenteServiceTrips) ? data.portalGerenteServiceTrips : [];
+                const remoteDeleted = Array.isArray(data.portalGerenteDeletedTrips) ? data.portalGerenteDeletedTrips : [];
+
+                remoteDeleted.forEach(id => serviceTripsState.deletedIds.add(id));
+
+                const mergedMap = new Map();
+                remoteTrips.forEach(rt => {
+                    if (rt && rt.id && !serviceTripsState.deletedIds.has(rt.id)) {
+                        mergedMap.set(rt.id, rt);
+                    }
+                });
+
+                let localHasNewerOrMissingInCloud = false;
+                serviceTripsState.trips.forEach(lt => {
+                    if (!lt || !lt.id || serviceTripsState.deletedIds.has(lt.id)) return;
+                    const rem = mergedMap.get(lt.id);
+                    if (!rem) {
+                        mergedMap.set(lt.id, lt);
+                        localHasNewerOrMissingInCloud = true;
+                    } else if ((lt.updatedAt || 0) > (rem.updatedAt || 0)) {
+                        mergedMap.set(lt.id, lt);
+                        localHasNewerOrMissingInCloud = true;
+                    }
+                });
+
+                serviceTripsState.trips = Array.from(mergedMap.values());
+                persistServiceTripsLocally();
+                renderServiceTripsSection();
+
+                if (localHasNewerOrMissingInCloud) {
+                    pushAllServiceTripsToCloud();
+                }
+            };
+
             try {
-                onSnapshot(collection(dbNovo, `artifacts/${firebaseConfigNovo.projectId}/service_trips`), (snap) => {
-                    const remoteMap = new Map();
-                    snap.forEach(docSnap => {
-                        const data = docSnap.data();
-                        if (data && !serviceTripsState.deletedIds.has(docSnap.id)) {
-                            remoteMap.set(docSnap.id, { id: docSnap.id, ...data });
-                        }
-                    });
-
-                    // Mescla registros locais e remotos preservando a versão mais recente
-                    serviceTripsState.trips.forEach(localTrip => {
-                        if (serviceTripsState.deletedIds.has(localTrip.id)) return;
-                        const rem = remoteMap.get(localTrip.id);
-                        if (!rem || (localTrip.updatedAt || 0) > (rem.updatedAt || 0)) {
-                            remoteMap.set(localTrip.id, localTrip);
-                        }
-                    });
-
-                    serviceTripsState.trips = Array.from(remoteMap.values());
-                    persistServiceTripsLocally();
-                    renderServiceTripsSection();
-                }, () => {
+                onSnapshot(doc(dbNovo, `artifacts/${firebaseConfigNovo.projectId}/schedules`, 'config_units'), mergeRemoteTripsSnapshot, () => {
                     renderServiceTripsSection();
                 });
             } catch (e) {
@@ -2511,16 +2553,27 @@
             document.getElementById('cmaForm').reset();
         };
 
-        async function syncCmaToFirebase(record) {
+        async function pushAllCmaToCloud() {
+            await authReadyPromise;
+            const payload = {
+                portalGerenteCmaRecords: cmaState.records,
+                portalGerenteDeletedCma: Array.from(cmaState.deletedIds),
+                portalGerenteCmaUpdatedAt: Date.now()
+            };
             try {
-                await setDoc(doc(dbNovo, `artifacts/${firebaseConfigNovo.projectId}/cma_records`, record.id), record);
+                await setDoc(doc(dbNovo, `artifacts/${firebaseConfigNovo.projectId}/schedules`, 'config_units'), payload, { merge: true });
+            } catch (e) {}
+            try {
+                await setDoc(doc(dbOriginal, `artifacts/${firebaseConfigOriginal.projectId}/schedules`, 'config_units'), payload, { merge: true });
             } catch (e) {}
         }
 
-        async function deleteCmaFromFirebase(recordId) {
-            try {
-                await deleteDoc(doc(dbNovo, `artifacts/${firebaseConfigNovo.projectId}/cma_records`, recordId));
-            } catch (e) {}
+        async function syncCmaToFirebase() {
+            await pushAllCmaToCloud();
+        }
+
+        async function deleteCmaFromFirebase() {
+            await pushAllCmaToCloud();
         }
 
         window.saveCmaRecord = function(e) {
@@ -2635,29 +2688,50 @@
             deleteCmaFromFirebase(recordId);
         };
 
-        function subscribeCmaFromFirebase() {
+        async function subscribeCmaFromFirebase() {
+            await authReadyPromise;
+            const mergeRemoteCmaSnapshot = (docSnap) => {
+                if (!docSnap.exists()) {
+                    if (cmaState.records.length > 0) pushAllCmaToCloud();
+                    return;
+                }
+                const data = docSnap.data() || {};
+                const remoteRecords = Array.isArray(data.portalGerenteCmaRecords) ? data.portalGerenteCmaRecords : [];
+                const remoteDeleted = Array.isArray(data.portalGerenteDeletedCma) ? data.portalGerenteDeletedCma : [];
+
+                remoteDeleted.forEach(id => cmaState.deletedIds.add(id));
+
+                const mergedMap = new Map();
+                remoteRecords.forEach(rr => {
+                    if (rr && rr.id && !cmaState.deletedIds.has(rr.id)) {
+                        mergedMap.set(rr.id, rr);
+                    }
+                });
+
+                let localHasNewerOrMissingInCloud = false;
+                cmaState.records.forEach(lr => {
+                    if (!lr || !lr.id || cmaState.deletedIds.has(lr.id)) return;
+                    const rem = mergedMap.get(lr.id);
+                    if (!rem) {
+                        mergedMap.set(lr.id, lr);
+                        localHasNewerOrMissingInCloud = true;
+                    } else if ((lr.updatedAt || 0) > (rem.updatedAt || 0)) {
+                        mergedMap.set(lr.id, lr);
+                        localHasNewerOrMissingInCloud = true;
+                    }
+                });
+
+                cmaState.records = Array.from(mergedMap.values());
+                persistCmaLocally();
+                renderCmaSection();
+
+                if (localHasNewerOrMissingInCloud) {
+                    pushAllCmaToCloud();
+                }
+            };
+
             try {
-                onSnapshot(collection(dbNovo, `artifacts/${firebaseConfigNovo.projectId}/cma_records`), (snap) => {
-                    const remoteMap = new Map();
-                    snap.forEach(docSnap => {
-                        const data = docSnap.data();
-                        if (data && !cmaState.deletedIds.has(docSnap.id)) {
-                            remoteMap.set(docSnap.id, { id: docSnap.id, ...data });
-                        }
-                    });
-
-                    cmaState.records.forEach(localRec => {
-                        if (cmaState.deletedIds.has(localRec.id)) return;
-                        const rem = remoteMap.get(localRec.id);
-                        if (!rem || (localRec.updatedAt || 0) > (rem.updatedAt || 0)) {
-                            remoteMap.set(localRec.id, localRec);
-                        }
-                    });
-
-                    cmaState.records = Array.from(remoteMap.values());
-                    persistCmaLocally();
-                    renderCmaSection();
-                }, () => {
+                onSnapshot(doc(dbNovo, `artifacts/${firebaseConfigNovo.projectId}/schedules`, 'config_units'), mergeRemoteCmaSnapshot, () => {
                     renderCmaSection();
                 });
             } catch (e) {
