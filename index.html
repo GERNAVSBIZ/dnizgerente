@@ -245,9 +245,25 @@
                     </div>
                 </div>
 
-                <!-- Situação de Férias, Ausências e Folgas do Dia (Sempre visível e limpa) -->
-                <div id="leaveAndOffContainer" class="mt-5 pt-4 border-t border-std grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div class="sub-panel p-3.5">
+                <!-- Situação de Férias, Ausências e Folgas do Dia (Expansível, abre só quando necessário) -->
+                <div id="leaveAndOffContainer" class="mt-4 pt-3 border-t border-std">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button type="button" onclick="window.toggleEscalaExtraSection('leave')" id="btnToggleLeaveBox" class="h-7 px-2.5 rounded-lg sub-panel hover:opacity-85 text-[11px] font-semibold text-sec flex items-center gap-1.5 transition" title="Expandir/recolher Férias, Recesso e Licenças do dia">
+                            <i class="fas fa-umbrella-beach text-[10px] text-rose-500"></i>
+                            <span>Férias / Recesso / Licenças</span>
+                            <span id="leaveCountBadge" class="px-1.5 py-0.2 rounded bg-rose-500/15 text-rose-400 border border-rose-500/30 font-mono text-[10px]">0</span>
+                            <i id="iconChevronLeave" class="fas fa-chevron-down text-[9px] text-mut transition-transform duration-200"></i>
+                        </button>
+
+                        <button type="button" onclick="window.toggleEscalaExtraSection('off')" id="btnToggleOffBox" class="h-7 px-2.5 rounded-lg sub-panel hover:opacity-85 text-[11px] font-semibold text-sec flex items-center gap-1.5 transition" title="Expandir/recolher Folgas do Dia">
+                            <i class="fas fa-mug-hot text-[10px] text-sky-500"></i>
+                            <span>Folgas do Dia</span>
+                            <span id="offCountBadge" class="px-1.5 py-0.2 rounded bg-sky-500/15 text-sky-400 border border-sky-500/30 font-mono text-[10px]">0</span>
+                            <i id="iconChevronOff" class="fas fa-chevron-down text-[9px] text-mut transition-transform duration-200"></i>
+                        </button>
+                    </div>
+
+                    <div id="leaveCollapsiblePanel" class="hidden mt-2.5 sub-panel p-3.5">
                         <div class="text-[11px] font-bold uppercase tracking-wider text-rose-500 mb-2 flex items-center gap-1.5">
                             <i class="fas fa-umbrella-beach text-[10px]"></i>
                             <span>Férias / Recesso / Licenças</span>
@@ -257,7 +273,7 @@
                         </div>
                     </div>
 
-                    <div class="sub-panel p-3.5">
+                    <div id="offCollapsiblePanel" class="hidden mt-2.5 sub-panel p-3.5">
                         <div class="text-[11px] font-bold uppercase tracking-wider text-sky-500 mb-2 flex items-center gap-1.5">
                             <i class="fas fa-mug-hot text-[10px]"></i>
                             <span>Folgas do Dia</span>
@@ -265,6 +281,113 @@
                         <div id="offListBox" class="flex flex-wrap gap-1.5 text-xs">
                             <span class="text-mut">--</span>
                         </div>
+                    </div>
+                </div>
+
+                <!-- ================= VIAGENS A SERVIÇO (MISSÕES DO MÊS + OPÇÃO DE ANTERIORES) ================= -->
+                <div id="serviceTripsSection" class="mt-4 pt-4 border-t border-std">
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+                        <div class="flex items-center gap-2">
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
+                                <i class="fas fa-plane-departure text-[10px]"></i>
+                                <span id="serviceTripsHeaderTitle">Viagens a Serviço — Mês</span>
+                            </span>
+                            <span id="serviceTripsMonthBadge" class="px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-400 border border-indigo-500/30 font-mono text-[10px] font-bold">0</span>
+                        </div>
+
+                        <div class="flex flex-wrap items-center gap-1.5">
+                            <button type="button" onclick="window.toggleFutureServiceTrips()" id="btnToggleFutureTrips" class="h-7 px-2.5 rounded-lg sub-panel hover:opacity-85 text-[11px] font-medium text-sec flex items-center gap-1.5 transition" title="Visualizar viagens a serviço agendadas para os próximos meses">
+                                <i class="fas fa-calendar-plus text-[10px] text-amber-500"></i>
+                                <span id="btnToggleFutureTripsLabel">Futuras</span>
+                                <span id="futureTripsCountBadge" class="px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30 font-mono text-[10px]">0</span>
+                                <i id="iconChevronFutureTrips" class="fas fa-chevron-down text-[9px] text-mut transition-transform duration-200"></i>
+                            </button>
+
+                            <button type="button" onclick="window.togglePastServiceTrips()" id="btnTogglePastTrips" class="h-7 px-2.5 rounded-lg sub-panel hover:opacity-85 text-[11px] font-medium text-sec flex items-center gap-1.5 transition" title="Visualizar viagens a serviço anteriores">
+                                <i class="fas fa-clock-rotate-left text-[10px] text-mut"></i>
+                                <span id="btnTogglePastTripsLabel">Anteriores</span>
+                                <span id="pastTripsCountBadge" class="px-1.5 py-0.2 rounded bg-slate-500/15 text-mut border border-std font-mono text-[10px]">0</span>
+                                <i id="iconChevronPastTrips" class="fas fa-chevron-down text-[9px] text-mut transition-transform duration-200"></i>
+                            </button>
+
+                            <button type="button" onclick="window.openServiceTripModal()" class="h-7 px-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-semibold flex items-center gap-1.5 transition" title="Informar nova viagem a serviço">
+                                <i class="fas fa-plus text-[9px]"></i>
+                                <span>Informar Viagem</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Lista de Viagens do Mês -->
+                    <div id="serviceTripsCurrentList" class="space-y-2 text-xs">
+                        <div class="sub-panel p-3 text-center text-xs text-mut italic">Nenhuma viagem a serviço registrada neste mês.</div>
+                    </div>
+
+                    <!-- Lista Expansível de Viagens Futuras (Próximos Meses — Oculta por padrão) -->
+                    <div id="serviceTripsFutureCollapsible" class="hidden mt-3 pt-2.5 border-t border-std border-dashed">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                                <i class="fas fa-calendar-plus text-[9px]"></i>
+                                <span>Viagens Futuras (Próximos Meses)</span>
+                            </span>
+                        </div>
+                        <div id="serviceTripsFutureList" class="space-y-1.5 text-xs max-h-[180px] overflow-y-auto pr-1"></div>
+                    </div>
+
+                    <!-- Lista Expansível de Viagens Anteriores (Oculta por padrão) -->
+                    <div id="serviceTripsPastCollapsible" class="hidden mt-3 pt-2.5 border-t border-std border-dashed">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-mut flex items-center gap-1.5">
+                                <i class="fas fa-box-archive text-[9px]"></i>
+                                <span>Histórico de Viagens Anteriores</span>
+                            </span>
+                        </div>
+                        <div id="serviceTripsPastList" class="space-y-1.5 text-xs max-h-[180px] overflow-y-auto pr-1"></div>
+                    </div>
+                </div>
+
+                <!-- ================= CONTROLE DE CMA (HABILITAÇÃO / INSPEÇÃO DE SAÚDE — CICLO 90 / 60 / 30 DIAS) ================= -->
+                <div id="cmaControlSection" class="mt-4 pt-4 border-t border-std">
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                                <i class="fas fa-heart-pulse text-[10px]"></i>
+                                <span>Controle CMA (Inspeção de Saúde)</span>
+                            </span>
+                            <span id="cmaActiveAlertsBadge" class="hidden px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/40 font-mono text-[10px] font-bold"></span>
+                            <span id="cmaPendingRenewalBadge" class="hidden px-2 py-0.5 rounded bg-rose-500/25 text-rose-300 border border-rose-500/50 font-mono text-[10px] font-bold animate-pulse"></span>
+                        </div>
+
+                        <div class="flex flex-wrap items-center gap-1.5">
+                            <button type="button" onclick="window.toggleCmaFullList()" id="btnToggleCmaList" class="h-7 px-2.5 rounded-lg sub-panel hover:opacity-85 text-[11px] font-medium text-sec flex items-center gap-1.5 transition" title="Abrir/fechar quadro completo de validades CMA dos 8 operadores">
+                                <i class="fas fa-id-card-clip text-[10px] text-emerald-400"></i>
+                                <span>Quadro Geral CMA</span>
+                                <span id="cmaTotalCountBadge" class="px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-mono text-[10px]">0</span>
+                                <i id="iconChevronCmaList" class="fas fa-chevron-down text-[9px] text-mut transition-transform duration-200"></i>
+                            </button>
+
+                            <button type="button" onclick="window.openCmaModal()" class="h-7 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold flex items-center gap-1.5 transition" title="Cadastrar ou atualizar validade de CMA de um operador">
+                                <i class="fas fa-plus text-[9px]"></i>
+                                <span>Informar CMA</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Alertas Automáticos de Vencimento CMA (90d / 60d / 30d) e Lembretes Fixos de Renovação de Data -->
+                    <div id="cmaAlertsContainer" class="space-y-2 text-xs"></div>
+
+                    <!-- Gaveta Expansível: Quadro Geral com Todos os Operadores + Wilkson (Oculta por padrão) -->
+                    <div id="cmaFullListCollapsible" class="hidden mt-3 pt-2.5 border-t border-std border-dashed">
+                        <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-mut flex items-center gap-1.5">
+                                <i class="fas fa-users-gear text-[9px]"></i>
+                                <span>Validades CMA do Efetivo (Ciclos de 6 Meses, Anual e Bianual)</span>
+                            </span>
+                            <button type="button" onclick="window.importOperatorsToCma()" class="h-6 px-2 rounded sub-panel hover:opacity-85 text-[10px] font-semibold text-emerald-400 flex items-center gap-1 transition" title="Pré-carregar automaticamente os nomes dos operadores da escala e Wilkson">
+                                <i class="fas fa-user-check text-[9px]"></i>
+                                <span>Carregar Efetivo da Escala</span>
+                            </button>
+                        </div>
+                        <div id="cmaFullListBox" class="space-y-1.5 text-xs max-h-[260px] overflow-y-auto pr-1"></div>
                     </div>
                 </div>
             </section>
@@ -313,7 +436,7 @@
                     </div>
 
                     <!-- CAIXA DA MENSAGEM METAR DA HORA -->
-                    <div class="sub-panel p-5 mb-4 border-l-4 border-l-sky-500">
+                    <div class="sub-panel p-5 mb-3 border-l-4 border-l-sky-500">
                         <div class="flex items-center justify-between mb-2.5">
                             <span id="metarHourCheckBadge" class="text-xs font-medium text-sec">Verificando...</span>
                             <span id="metarAge" class="px-2 py-0.5 rounded bg-sky-500/15 text-sky-500 border border-sky-500/25 text-xs font-mono font-semibold"></span>
@@ -329,42 +452,61 @@
                         </div>
                     </div>
 
-                    <!-- OPÇÕES DO METAR (ICAO, Volume, Auto-Refresh e Simular Atraso) -->
-                    <div class="sub-panel p-3.5 mb-4 flex flex-wrap items-center justify-between gap-3 text-xs">
-                        <div class="flex items-center gap-2">
-                            <label for="aerodromoInput" class="font-semibold text-mut uppercase">ICAO:</label>
-                            <input type="text" id="aerodromoInput" value="SBIZ" maxlength="4" class="w-16 h-8 px-2 rounded border border-std bg-transparent text-center font-mono font-bold uppercase focus:outline-none">
-                            <button id="alterarAerodromo" class="h-8 px-3 rounded bg-sky-600 hover:bg-sky-500 text-white font-semibold transition">
-                                Alterar
+                    <!-- BARRA EXPANSÍVEL: CÓDIGO ICAO / OPÇÕES E HISTÓRICO DE MENSAGENS (ABRE SÓ QUANDO NECESSÁRIO) -->
+                    <div class="pt-2 border-t border-std">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <button type="button" onclick="window.toggleMetarSection('options')" id="btnToggleMetarOptions" class="h-7 px-2.5 rounded-lg sub-panel hover:opacity-85 text-[11px] font-semibold text-sec flex items-center gap-1.5 transition" title="Expandir/recolher configuração de código ICAO, volume e simulação de alarme">
+                                    <i class="fas fa-sliders text-[10px] text-sky-500"></i>
+                                    <span>Código ICAO & Opções</span>
+                                    <span id="metarIcaoQuickBadge" class="px-1.5 py-0.2 rounded bg-sky-500/15 text-sky-400 border border-sky-500/30 font-mono text-[10px]">SBIZ</span>
+                                    <i id="iconChevronMetarOptions" class="fas fa-chevron-down text-[9px] text-mut transition-transform duration-200"></i>
+                                </button>
+
+                                <button type="button" onclick="window.toggleMetarSection('history')" id="btnToggleMetarHistory" class="h-7 px-2.5 rounded-lg sub-panel hover:opacity-85 text-[11px] font-semibold text-sec flex items-center gap-1.5 transition" title="Expandir/recolher histórico de mensagens METAR/SPECI">
+                                    <i class="fas fa-clock-rotate-left text-[10px] text-sky-500"></i>
+                                    <span>Histórico de Mensagens</span>
+                                    <span id="metarHistoryCountBadge" class="px-1.5 py-0.2 rounded bg-slate-500/15 text-sec border border-std font-mono text-[10px]">0</span>
+                                    <i id="iconChevronMetarHistory" class="fas fa-chevron-down text-[9px] text-mut transition-transform duration-200"></i>
+                                </button>
+                            </div>
+
+                            <a href="https://metargeral.vercel.app/metar_relatorio.html" target="_blank" class="text-xs font-medium text-sky-500 hover:underline">
+                                Relatórios PDF <i class="fas fa-arrow-up-right-from-square text-[10px] ml-0.5"></i>
+                            </a>
+                        </div>
+
+                        <!-- OPÇÕES DO METAR (ICAO, Volume, Auto-Refresh e Simular Atraso) — Recolhido por padrão -->
+                        <div id="metarOptionsCollapsible" class="hidden mt-2.5 sub-panel p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs">
+                            <div class="flex items-center gap-2">
+                                <label for="aerodromoInput" class="font-semibold text-mut uppercase">ICAO:</label>
+                                <input type="text" id="aerodromoInput" value="SBIZ" maxlength="4" class="w-16 h-8 px-2 rounded border border-std bg-transparent text-center font-mono font-bold uppercase focus:outline-none">
+                                <button id="alterarAerodromo" class="h-8 px-3 rounded bg-sky-600 hover:bg-sky-500 text-white font-semibold transition">
+                                    Alterar
+                                </button>
+                            </div>
+
+                            <div class="flex items-center gap-2">
+                                <span class="font-semibold text-mut uppercase">Volume:</span>
+                                <input type="range" id="volumeControl" min="0" max="1" step="0.1" value="0.7" class="w-24">
+                            </div>
+
+                            <label class="flex items-center gap-1.5 cursor-pointer select-none text-sec font-medium">
+                                <input type="checkbox" id="autoRefresh" checked class="w-4 h-4">
+                                <span>Auto (30s)</span>
+                            </label>
+
+                            <button id="simularAtrasoBtn" class="h-8 px-3 rounded-lg bg-red-600/90 hover:bg-red-600 text-white font-semibold transition">
+                                Simular Atraso (Testar Alarme)
                             </button>
                         </div>
 
-                        <div class="flex items-center gap-2">
-                            <span class="font-semibold text-mut uppercase">Volume:</span>
-                            <input type="range" id="volumeControl" min="0" max="1" step="0.1" value="0.7" class="w-24">
+                        <!-- Histórico de Mensagens METAR/SPECI — Recolhido por padrão -->
+                        <div id="metarHistoryCollapsible" class="hidden mt-2.5 sub-panel p-3">
+                            <div id="historyContainer" class="space-y-1 font-mono text-xs text-sec max-h-[115px] overflow-y-auto pr-1">
+                                <div class="text-mut font-sans">Nenhum histórico disponível</div>
+                            </div>
                         </div>
-
-                        <label class="flex items-center gap-1.5 cursor-pointer select-none text-sec font-medium">
-                            <input type="checkbox" id="autoRefresh" checked class="w-4 h-4">
-                            <span>Auto (30s)</span>
-                        </label>
-
-                        <button id="simularAtrasoBtn" class="h-8 px-3 rounded-lg bg-red-600/90 hover:bg-red-600 text-white font-semibold transition">
-                            Simular Atraso (Testar Alarme)
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Histórico de Mensagens METAR/SPECI (Compacto: 2 mensagens + barra de rolagem) -->
-                <div class="pt-2.5 border-t border-std">
-                    <div class="flex items-center justify-between mb-1.5">
-                        <span class="text-[11px] font-semibold uppercase tracking-wider text-mut">Histórico de Mensagens</span>
-                        <a href="https://metargeral.vercel.app/metar_relatorio.html" target="_blank" class="text-xs font-medium text-sky-500 hover:underline">
-                            Relatórios PDF <i class="fas fa-arrow-up-right-from-square text-[10px] ml-0.5"></i>
-                        </a>
-                    </div>
-                    <div id="historyContainer" class="space-y-1 font-mono text-xs text-sec max-h-[62px] overflow-y-auto pr-1">
-                        <div class="text-mut font-sans">Nenhum histórico disponível</div>
                     </div>
                 </div>
 
@@ -547,11 +689,135 @@
         </div>
     </div>
 
+    <!-- ================= MODAL: INFORMAR / EDITAR VIAGEM A SERVIÇO ================= -->
+    <div id="serviceTripModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="panel w-full max-w-md p-6">
+            <div class="flex items-center justify-between pb-3 mb-4 border-b border-std">
+                <div class="flex items-center gap-2">
+                    <i class="fas fa-plane-departure text-indigo-400 text-sm"></i>
+                    <h3 class="font-bold text-base" id="serviceTripModalTitle">Informar Viagem a Serviço</h3>
+                </div>
+                <button onclick="window.closeServiceTripModal()" class="text-sec hover:opacity-75">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="serviceTripForm" onsubmit="window.saveServiceTrip(event)" class="space-y-3.5 text-xs">
+                <input type="hidden" id="tripEditIdInput" value="">
+                <div>
+                    <label class="block font-semibold text-mut uppercase mb-1">Nome do Operador *</label>
+                    <input type="text" id="tripOperatorInput" list="scheduleOperatorsDatalist" required placeholder="Selecione ou digite o nome do operador..." class="w-full h-9 px-3 rounded-lg sub-panel focus:outline-none font-semibold uppercase">
+                    <datalist id="scheduleOperatorsDatalist"></datalist>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-mut uppercase mb-1">Início da Viagem *</label>
+                        <input type="date" id="tripStartInput" required class="w-full h-9 px-3 rounded-lg sub-panel font-mono focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-mut uppercase mb-1">Fim da Viagem *</label>
+                        <input type="date" id="tripEndInput" required class="w-full h-9 px-3 rounded-lg sub-panel font-mono focus:outline-none">
+                    </div>
+                </div>
+                <div>
+                    <label class="block font-semibold text-mut uppercase mb-1">Status da Viagem</label>
+                    <select id="tripStatusSelect" class="w-full h-9 px-3 rounded-lg sub-panel focus:outline-none">
+                        <option value="auto">Automático (conforme datas de início e fim)</option>
+                        <option value="proximo">Próximo de Viajar</option>
+                        <option value="em_viagem">Em Viagem</option>
+                        <option value="retornando">Retornando</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block font-semibold text-mut uppercase mb-1">Destino / Observação (Opcional)</label>
+                    <input type="text" id="tripNotesInput" placeholder="Ex: Curso, Missão Técnica, RJ..." class="w-full h-9 px-3 rounded-lg sub-panel focus:outline-none">
+                </div>
+                <div class="flex justify-end gap-2 pt-3 border-t border-std">
+                    <button type="button" onclick="window.closeServiceTripModal()" class="px-4 py-2 rounded-lg sub-panel font-semibold">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition">Salvar Viagem</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ================= MODAL: CADASTRAR / RENOVAR CMA (INSPEÇÃO DE SAÚDE) ================= -->
+    <div id="cmaModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="panel w-full max-w-md p-6">
+            <div class="flex items-center justify-between pb-3 mb-4 border-b border-std">
+                <div class="flex items-center gap-2">
+                    <i class="fas fa-heart-pulse text-emerald-400 text-sm"></i>
+                    <h3 class="font-bold text-base" id="cmaModalTitle">Informar / Renovar CMA</h3>
+                </div>
+                <button onclick="window.closeCmaModal()" class="text-sec hover:opacity-75">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="cmaForm" onsubmit="window.saveCmaRecord(event)" class="space-y-3.5 text-xs">
+                <input type="hidden" id="cmaEditIdInput" value="">
+                <div>
+                    <label class="block font-semibold text-mut uppercase mb-1">Nome do Operador *</label>
+                    <input type="text" id="cmaOperatorInput" list="scheduleOperatorsDatalist" required placeholder="Ex: WILKSON, Nome do Operador..." class="w-full h-9 px-3 rounded-lg sub-panel focus:outline-none font-semibold uppercase">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-mut uppercase mb-1">Periodicidade (Ciclo) *</label>
+                        <select id="cmaCycleSelect" onchange="window.updateCmaQuickRenewalHint()" class="w-full h-9 px-3 rounded-lg sub-panel focus:outline-none font-semibold">
+                            <option value="12">Anual (12 Meses)</option>
+                            <option value="24">Bianual (24 Meses)</option>
+                            <option value="6">Semestral (6 Meses)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-mut uppercase mb-1">Validade da CMA *</label>
+                        <input type="date" id="cmaExpiryInput" required class="w-full h-9 px-3 rounded-lg sub-panel font-mono focus:outline-none">
+                    </div>
+                </div>
+
+                <!-- Atalho Rápido de Renovação de Ciclo -->
+                <div class="sub-panel p-2.5 flex flex-wrap items-center justify-between gap-2">
+                    <span class="text-[11px] text-sec font-medium">
+                        <i class="fas fa-wand-magic-sparkles text-emerald-400 mr-1"></i>Sugerir próxima validade:
+                    </span>
+                    <div class="flex items-center gap-1.5">
+                        <button type="button" onclick="window.applyCmaCycleProjection(6)" class="px-2 py-1 rounded border border-std hover:border-emerald-500/50 text-[10px] font-mono font-semibold text-sec hover:text-emerald-400 transition" title="Somar 6 meses à data base">
+                            +6 Meses
+                        </button>
+                        <button type="button" onclick="window.applyCmaCycleProjection(12)" class="px-2 py-1 rounded border border-std hover:border-emerald-500/50 text-[10px] font-mono font-semibold text-sec hover:text-emerald-400 transition" title="Somar 1 ano (12 meses) à data base">
+                            +1 Ano
+                        </button>
+                        <button type="button" onclick="window.applyCmaCycleProjection(24)" class="px-2 py-1 rounded border border-std hover:border-emerald-500/50 text-[10px] font-mono font-semibold text-sec hover:text-emerald-400 transition" title="Somar 2 anos (24 meses) à data base">
+                            +2 Anos
+                        </button>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-mut uppercase mb-1">Status das Tratativas / Renovação</label>
+                    <select id="cmaStageSelect" class="w-full h-9 px-3 rounded-lg sub-panel focus:outline-none">
+                        <option value="regular">Monitoramento Normal (Alertas 90 / 60 / 30 dias)</option>
+                        <option value="tratativa">Em Tratativa (Protocolos / Viagem Iniciada)</option>
+                        <option value="aguardando_data">Inspeção Realizada — Lembrete Fixo p/ Atualizar Nova Data</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-mut uppercase mb-1">Observação / Protocolo (Opcional)</label>
+                    <input type="text" id="cmaNotesInput" placeholder="Ex: Agendado HAAF, Processo SEI, Junta de Saúde..." class="w-full h-9 px-3 rounded-lg sub-panel focus:outline-none">
+                </div>
+
+                <div class="flex justify-end gap-2 pt-3 border-t border-std">
+                    <button type="button" onclick="window.closeCmaModal()" class="px-4 py-2 rounded-lg sub-panel font-semibold">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition">Salvar / Reiniciar Ciclo</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <audio id="alertSound" src="https://cdn.freesound.org/previews/250/250629_4486188-lq.mp3" preload="auto" loop></audio>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getFirestore, collection, doc, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, doc, getDocs, setDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // =========================================================================
         // 1. RELÓGIOS E TURNOS ATIVOS (ALFA 00-08 | BRAVO 05-13 | CHARLIE 10-18)
@@ -924,6 +1190,8 @@
 
             const schedule = escalaState.currentSchedule;
             const container = document.getElementById('shiftsContainer');
+            renderServiceTripsSection();
+            renderCmaSection();
             if (!schedule || !schedule.dateHeaders || !schedule.scheduleData) return;
 
             const dayStatuses = getDayStatusArray(schedule.dateHeaders);
@@ -948,6 +1216,11 @@
                 container.innerHTML = `<div class="sub-panel p-6 text-center text-sm text-sec">Data fora da escala selecionada (${schedule.monthName}/${schedule.year}).</div>`;
                 document.getElementById('leaveListBox').innerHTML = `<span class="text-mut">--</span>`;
                 document.getElementById('offListBox').innerHTML = `<span class="text-mut">--</span>`;
+                const lBadge = document.getElementById('leaveCountBadge');
+                const oBadge = document.getElementById('offCountBadge');
+                if (lBadge) lBadge.textContent = '0';
+                if (oBadge) oBadge.textContent = '0';
+                renderAlteracoesOfTheDay();
                 return;
             }
 
@@ -1072,7 +1345,10 @@
                 }
             });
 
-            // Férias / Recesso / Licenças sempre visível + aviso de próximos 3 dias
+            // Férias / Recesso / Licenças expansível + aviso de próximos 3 dias
+            const leaveBadgeEl = document.getElementById('leaveCountBadge');
+            if (leaveBadgeEl) leaveBadgeEl.textContent = String(groups.LEAVE.length);
+
             const leaveBox = document.getElementById('leaveListBox');
             let leaveHtml = '';
             if (groups.LEAVE.length > 0) {
@@ -1101,7 +1377,10 @@
             }
             leaveBox.innerHTML = leaveHtml;
 
-            // Folgas do dia sempre visível + indicação do próximo turno
+            // Folgas do dia expansível + indicação do próximo turno
+            const offBadgeEl = document.getElementById('offCountBadge');
+            if (offBadgeEl) offBadgeEl.textContent = String(groups.OFF.length);
+
             const offBox = document.getElementById('offListBox');
             if (groups.OFF.length > 0) {
                 offBox.innerHTML = groups.OFF.map(item => {
@@ -1122,6 +1401,27 @@
 
             renderAlteracoesOfTheDay();
         }
+
+        window.toggleEscalaExtraSection = function(type) {
+            const isLeave = type === 'leave';
+            const panelEl = document.getElementById(isLeave ? 'leaveCollapsiblePanel' : 'offCollapsiblePanel');
+            const chevronEl = document.getElementById(isLeave ? 'iconChevronLeave' : 'iconChevronOff');
+            const btnEl = document.getElementById(isLeave ? 'btnToggleLeaveBox' : 'btnToggleOffBox');
+            if (!panelEl) return;
+
+            const willOpen = panelEl.classList.contains('hidden');
+            panelEl.classList.toggle('hidden', !willOpen);
+            if (chevronEl) chevronEl.classList.toggle('rotate-180', willOpen);
+            if (btnEl) {
+                if (isLeave) {
+                    btnEl.classList.toggle('border-rose-500/40', willOpen);
+                    btnEl.classList.toggle('text-rose-400', willOpen);
+                } else {
+                    btnEl.classList.toggle('border-sky-500/40', willOpen);
+                    btnEl.classList.toggle('text-sky-400', willOpen);
+                }
+            }
+        };
 
         function getAlteracaoStatusMeta(req) {
             const st = req.status || 'pending_confirmation';
@@ -1251,6 +1551,1117 @@
                 });
             } catch (e) {
                 renderAlteracoesOfTheDay();
+            }
+        }
+
+        // =========================================================================
+        // 2.5 VIAGENS A SERVIÇO (MISSÕES DO MÊS + HISTÓRICO DE ANTERIORES)
+        // =========================================================================
+        const SERVICE_TRIPS_STORAGE_KEY = 'portal_gerente_viagens_servico';
+        const SERVICE_TRIPS_DELETED_KEY = 'portal_gerente_viagens_deleted';
+
+        const serviceTripsState = {
+            trips: (() => {
+                try {
+                    return JSON.parse(localStorage.getItem(SERVICE_TRIPS_STORAGE_KEY) || '[]');
+                } catch (e) {
+                    return [];
+                }
+            })(),
+            deletedIds: (() => {
+                try {
+                    return new Set(JSON.parse(localStorage.getItem(SERVICE_TRIPS_DELETED_KEY) || '[]'));
+                } catch (e) {
+                    return new Set();
+                }
+            })(),
+            showFuture: false,
+            showPast: false
+        };
+
+        function persistServiceTripsLocally() {
+            try {
+                localStorage.setItem(SERVICE_TRIPS_STORAGE_KEY, JSON.stringify(serviceTripsState.trips));
+                localStorage.setItem(SERVICE_TRIPS_DELETED_KEY, JSON.stringify(Array.from(serviceTripsState.deletedIds)));
+            } catch (e) {}
+        }
+
+        function parseIsoDateLocal(dateStr) {
+            if (!dateStr || typeof dateStr !== 'string') return null;
+            const parts = dateStr.split('-').map(Number);
+            if (parts.length !== 3 || parts.some(isNaN)) return null;
+            return new Date(parts[0], parts[1] - 1, parts[2], 0, 0, 0, 0);
+        }
+
+        function formatDateBr(dateStr) {
+            const dt = parseIsoDateLocal(dateStr);
+            if (!dt) return '--/--/----';
+            const pad = n => String(n).padStart(2, '0');
+            return `${pad(dt.getDate())}/${pad(dt.getMonth() + 1)}/${dt.getFullYear()}`;
+        }
+
+        function formatDateShortBr(dateStr) {
+            const dt = parseIsoDateLocal(dateStr);
+            if (!dt) return '--/--';
+            const pad = n => String(n).padStart(2, '0');
+            return `${pad(dt.getDate())}/${pad(dt.getMonth() + 1)}`;
+        }
+
+        function getServiceTripStatusMeta(trip, refDate = new Date()) {
+            const today = new Date(refDate);
+            today.setHours(0, 0, 0, 0);
+            const startDt = parseIsoDateLocal(trip.startDate);
+            const endDt = parseIsoDateLocal(trip.endDate);
+            const mode = trip.statusMode || 'auto';
+
+            const diffToStart = startDt ? Math.round((startDt - today) / 86400000) : 0;
+            const diffToEnd = endDt ? Math.round((endDt - today) / 86400000) : 0;
+
+            let resolvedStatus = mode;
+            if (mode === 'auto') {
+                if (startDt && today < startDt) {
+                    resolvedStatus = 'proximo';
+                } else if (endDt && today > endDt) {
+                    resolvedStatus = 'concluida';
+                } else if (endDt && (diffToEnd === 0 || (startDt && endDt > startDt && diffToEnd === 1))) {
+                    resolvedStatus = 'retornando';
+                } else {
+                    resolvedStatus = 'em_viagem';
+                }
+            }
+
+            let detailHint = '';
+            if (resolvedStatus === 'proximo') {
+                if (diffToStart === 1) detailHint = 'Inicia amanhã';
+                else if (diffToStart > 1) detailHint = `Inicia em ${diffToStart}d`;
+                else if (diffToStart === 0) detailHint = 'Inicia hoje';
+                return {
+                    key: 'proximo',
+                    label: 'Próximo de Viajar',
+                    detailHint,
+                    icon: 'fa-plane-departure',
+                    badgeClass: 'bg-amber-500/15 text-amber-400 border-amber-500/35',
+                    borderClass: 'border-l-amber-500',
+                    sortOrder: 2
+                };
+            }
+
+            if (resolvedStatus === 'retornando') {
+                if (diffToEnd === 0) detailHint = 'Retorna hoje';
+                else if (diffToEnd === 1) detailHint = 'Retorna amanhã';
+                else if (diffToEnd > 1) detailHint = `Retorna em ${diffToEnd}d`;
+                return {
+                    key: 'retornando',
+                    label: 'Retornando',
+                    detailHint,
+                    icon: 'fa-plane-arrival',
+                    badgeClass: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/35',
+                    borderClass: 'border-l-emerald-500',
+                    sortOrder: 1
+                };
+            }
+
+            if (resolvedStatus === 'em_viagem') {
+                if (diffToEnd > 0) detailHint = `Restam ${diffToEnd}d`;
+                else if (diffToEnd === 0) detailHint = 'Último dia';
+                return {
+                    key: 'em_viagem',
+                    label: 'Em Viagem',
+                    detailHint,
+                    icon: 'fa-plane',
+                    badgeClass: 'bg-sky-500/15 text-sky-400 border-sky-500/35',
+                    borderClass: 'border-l-sky-500',
+                    sortOrder: 0
+                };
+            }
+
+            return {
+                key: 'concluida',
+                label: 'Concluída',
+                detailHint: 'Finalizada',
+                icon: 'fa-check',
+                badgeClass: 'bg-slate-500/15 text-slate-400 border-slate-500/30',
+                borderClass: 'border-l-slate-500',
+                sortOrder: 3
+            };
+        }
+
+        function updateScheduleOperatorsDatalist() {
+            const datalist = document.getElementById('scheduleOperatorsDatalist');
+            if (!datalist) return;
+            const schedule = escalaState.currentSchedule;
+            const names = new Set();
+            if (schedule && Array.isArray(schedule.scheduleData)) {
+                schedule.scheduleData.forEach(op => {
+                    if (op.name) names.add(op.name.trim());
+                });
+            }
+            serviceTripsState.trips.forEach(t => {
+                if (t.operatorName) names.add(t.operatorName.trim());
+            });
+            datalist.innerHTML = Array.from(names)
+                .sort((a, b) => a.localeCompare(b, 'pt-BR'))
+                .map(n => `<option value="${n}"></option>`)
+                .join('');
+        }
+
+        function renderServiceTripsSection() {
+            const currentListEl = document.getElementById('serviceTripsCurrentList');
+            const futureListEl = document.getElementById('serviceTripsFutureList');
+            const pastListEl = document.getElementById('serviceTripsPastList');
+            const monthBadgeEl = document.getElementById('serviceTripsMonthBadge');
+            const futureBadgeEl = document.getElementById('futureTripsCountBadge');
+            const pastBadgeEl = document.getElementById('pastTripsCountBadge');
+            const headerTitleEl = document.getElementById('serviceTripsHeaderTitle');
+            const futureBoxEl = document.getElementById('serviceTripsFutureCollapsible');
+            const pastBoxEl = document.getElementById('serviceTripsPastCollapsible');
+            if (!currentListEl || !pastListEl) return;
+
+            updateScheduleOperatorsDatalist();
+
+            const refDate = escalaState.selectedDate || new Date();
+            const refYear = refDate.getFullYear();
+            const refMonth = refDate.getMonth();
+            const monthStart = new Date(refYear, refMonth, 1, 0, 0, 0, 0);
+            const monthEnd = new Date(refYear, refMonth + 1, 0, 23, 59, 59, 999);
+
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            if (headerTitleEl) {
+                headerTitleEl.textContent = `Viagens a Serviço — ${MONTHS_FULL[refMonth]}`;
+            }
+
+            const currentMonthTrips = [];
+            const futureTrips = [];
+            const pastTrips = [];
+
+            serviceTripsState.trips.forEach(trip => {
+                const sDt = parseIsoDateLocal(trip.startDate);
+                const eDt = parseIsoDateLocal(trip.endDate);
+                if (!sDt || !eDt) return;
+
+                const overlapsSelectedMonth = (sDt <= monthEnd && eDt >= monthStart);
+                const isAfterSelectedMonth = (sDt > monthEnd);
+                const isBeforeSelectedMonth = (eDt < monthStart);
+                const isAlreadyEndedBeforeToday = (eDt < today && (trip.statusMode || 'auto') === 'auto');
+
+                if (overlapsSelectedMonth && !isAlreadyEndedBeforeToday) {
+                    currentMonthTrips.push(trip);
+                } else if (isAfterSelectedMonth) {
+                    futureTrips.push(trip);
+                } else if (overlapsSelectedMonth && isAlreadyEndedBeforeToday) {
+                    pastTrips.push(trip);
+                } else if (isBeforeSelectedMonth) {
+                    pastTrips.push(trip);
+                }
+            });
+
+            currentMonthTrips.sort((a, b) => {
+                const metaA = getServiceTripStatusMeta(a, today);
+                const metaB = getServiceTripStatusMeta(b, today);
+                if (metaA.sortOrder !== metaB.sortOrder) return metaA.sortOrder - metaB.sortOrder;
+                return (a.startDate || '').localeCompare(b.startDate || '');
+            });
+
+            futureTrips.sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
+            pastTrips.sort((a, b) => (b.endDate || '').localeCompare(a.endDate || ''));
+
+            if (monthBadgeEl) monthBadgeEl.textContent = String(currentMonthTrips.length);
+            if (futureBadgeEl) futureBadgeEl.textContent = String(futureTrips.length);
+            if (pastBadgeEl) pastBadgeEl.textContent = String(pastTrips.length);
+
+            if (currentMonthTrips.length === 0) {
+                currentListEl.innerHTML = `<div class="sub-panel p-3 text-center text-xs text-mut italic">Nenhuma viagem a serviço ativa/prevista em ${MONTHS_FULL[refMonth]}.</div>`;
+            } else {
+                currentListEl.innerHTML = currentMonthTrips.map(trip => {
+                    const meta = getServiceTripStatusMeta(trip, today);
+                    const sDt = parseIsoDateLocal(trip.startDate);
+                    const eDt = parseIsoDateLocal(trip.endDate);
+                    const totalDays = (sDt && eDt) ? Math.max(1, Math.round((eDt - sDt) / 86400000) + 1) : 1;
+                    const noteTag = trip.notes
+                        ? `<span class="px-1.5 py-0.5 rounded bg-slate-500/15 text-sec border border-std text-[10px] font-medium truncate max-w-[180px]" title="${trip.notes.replace(/"/g, '&quot;')}">${trip.notes}</span>`
+                        : '';
+                    const detailSub = meta.detailHint
+                        ? `<span class="text-[10px] font-mono text-mut ml-1">(${meta.detailHint})</span>`
+                        : '';
+
+                    return `
+                        <div class="sub-panel border-l-4 ${meta.borderClass} px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2 transition">
+                            <div class="flex flex-wrap items-center gap-2 min-w-0">
+                                <span class="font-bold text-xs sm:text-sm tracking-tight px-2 py-0.5 rounded border border-std" style="background-color: var(--bg-surface);">
+                                    ${trip.operatorName}
+                                </span>
+                                ${noteTag}
+                                <span class="text-[11px] font-mono text-sec">
+                                    <i class="far fa-calendar-alt text-[10px] text-mut mr-1"></i>Início: <strong>${formatDateShortBr(trip.startDate)}</strong> • Fim: <strong>${formatDateShortBr(trip.endDate)}</strong>
+                                    <span class="text-[10px] text-mut">(${totalDays}d)</span>${detailSub}
+                                </span>
+                            </div>
+
+                            <div class="flex items-center gap-1.5 shrink-0">
+                                <button type="button" onclick="window.cycleServiceTripStatus('${trip.id}')" class="px-2 py-0.5 rounded border text-[11px] font-bold flex items-center gap-1.5 cursor-pointer hover:opacity-85 transition ${meta.badgeClass}" title="Clique para alternar status (Em Viagem / Retornando / Próximo de Viajar / Automático)">
+                                    <i class="fas ${meta.icon} text-[10px]"></i>
+                                    <span>${meta.label}</span>
+                                </button>
+                                <button type="button" onclick="window.openServiceTripModal('${trip.id}')" class="w-6 h-6 rounded sub-panel flex items-center justify-center text-mut hover:text-sky-400 transition" title="Editar viagem">
+                                    <i class="fas fa-pen text-[10px]"></i>
+                                </button>
+                                <button type="button" onclick="window.deleteServiceTrip('${trip.id}')" class="w-6 h-6 rounded sub-panel flex items-center justify-center text-mut hover:text-rose-400 transition" title="Excluir viagem">
+                                    <i class="fas fa-trash-can text-[10px]"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            if (futureListEl) {
+                if (futureTrips.length === 0) {
+                    futureListEl.innerHTML = `<div class="text-center text-xs text-mut italic py-2">Nenhuma viagem agendada para os próximos meses.</div>`;
+                } else {
+                    futureListEl.innerHTML = futureTrips.map(trip => {
+                        const meta = getServiceTripStatusMeta(trip, today);
+                        const sDt = parseIsoDateLocal(trip.startDate);
+                        const eDt = parseIsoDateLocal(trip.endDate);
+                        const totalDays = (sDt && eDt) ? Math.max(1, Math.round((eDt - sDt) / 86400000) + 1) : 1;
+                        const monthLabel = sDt ? MONTHS_FULL[sDt.getMonth()] : '';
+                        const noteText = trip.notes ? ` • <span class="text-sec">${trip.notes}</span>` : '';
+                        const detailSub = meta.detailHint ? ` <span class="text-[10px] text-amber-400/90">(${meta.detailHint})</span>` : '';
+                        return `
+                            <div class="sub-panel border-l-4 border-l-amber-500 px-3 py-2 flex flex-wrap items-center justify-between gap-2 transition">
+                                <div class="flex flex-wrap items-center gap-2 text-xs">
+                                    <span class="font-bold text-xs px-2 py-0.5 rounded border border-std" style="background-color: var(--bg-surface);">${trip.operatorName}</span>
+                                    <span class="px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-400 border border-indigo-500/30 text-[10px] font-mono font-semibold uppercase">${monthLabel}</span>
+                                    <span class="font-mono text-[11px] text-sec">
+                                        Início: <strong>${formatDateBr(trip.startDate)}</strong> • Fim: <strong>${formatDateBr(trip.endDate)}</strong> (${totalDays}d)${detailSub}${noteText}
+                                    </span>
+                                </div>
+                                <div class="flex items-center gap-1.5">
+                                    <span class="px-2 py-0.5 rounded border text-[10px] font-bold flex items-center gap-1 ${meta.badgeClass}">
+                                        <i class="fas ${meta.icon} text-[9px]"></i>
+                                        <span>${meta.label}</span>
+                                    </span>
+                                    <button type="button" onclick="window.openServiceTripModal('${trip.id}')" class="w-6 h-6 rounded sub-panel flex items-center justify-center text-mut hover:text-sky-400 transition" title="Editar viagem">
+                                        <i class="fas fa-pen text-[10px]"></i>
+                                    </button>
+                                    <button type="button" onclick="window.deleteServiceTrip('${trip.id}')" class="w-6 h-6 rounded sub-panel flex items-center justify-center text-mut hover:text-rose-400 transition" title="Excluir viagem">
+                                        <i class="fas fa-trash-can text-[10px]"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            }
+
+            if (pastTrips.length === 0) {
+                pastListEl.innerHTML = `<div class="text-center text-xs text-mut italic py-2">Nenhuma viagem anterior registrada no histórico.</div>`;
+            } else {
+                pastListEl.innerHTML = pastTrips.map(trip => {
+                    const noteText = trip.notes ? ` • <span class="text-sec">${trip.notes}</span>` : '';
+                    return `
+                        <div class="sub-panel border-l-4 border-l-slate-500 px-3 py-2 flex flex-wrap items-center justify-between gap-2 opacity-85 hover:opacity-100 transition">
+                            <div class="flex flex-wrap items-center gap-2 text-xs">
+                                <span class="font-semibold text-sec">${trip.operatorName}</span>
+                                <span class="font-mono text-[11px] text-mut">
+                                    ${formatDateBr(trip.startDate)} a ${formatDateBr(trip.endDate)}${noteText}
+                                </span>
+                            </div>
+                            <div class="flex items-center gap-1.5">
+                                <span class="px-1.5 py-0.5 rounded bg-slate-500/15 text-slate-400 border border-slate-500/30 text-[10px] font-mono font-semibold">
+                                    Anterior / Concluída
+                                </span>
+                                <button type="button" onclick="window.openServiceTripModal('${trip.id}')" class="w-6 h-6 rounded sub-panel flex items-center justify-center text-mut hover:text-sky-400 transition" title="Editar viagem">
+                                    <i class="fas fa-pen text-[10px]"></i>
+                                </button>
+                                <button type="button" onclick="window.deleteServiceTrip('${trip.id}')" class="w-6 h-6 rounded sub-panel flex items-center justify-center text-mut hover:text-rose-400 transition" title="Remover do histórico">
+                                    <i class="fas fa-trash-can text-[10px]"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            if (futureBoxEl) {
+                futureBoxEl.classList.toggle('hidden', !serviceTripsState.showFuture);
+            }
+            if (pastBoxEl) {
+                pastBoxEl.classList.toggle('hidden', !serviceTripsState.showPast);
+            }
+        }
+
+        window.toggleFutureServiceTrips = function() {
+            serviceTripsState.showFuture = !serviceTripsState.showFuture;
+            const chevron = document.getElementById('iconChevronFutureTrips');
+            const btn = document.getElementById('btnToggleFutureTrips');
+            if (chevron) {
+                chevron.classList.toggle('rotate-180', serviceTripsState.showFuture);
+            }
+            if (btn) {
+                btn.classList.toggle('border-amber-500/40', serviceTripsState.showFuture);
+                btn.classList.toggle('text-amber-400', serviceTripsState.showFuture);
+            }
+            renderServiceTripsSection();
+        };
+
+        window.togglePastServiceTrips = function() {
+            serviceTripsState.showPast = !serviceTripsState.showPast;
+            const chevron = document.getElementById('iconChevronPastTrips');
+            const btn = document.getElementById('btnTogglePastTrips');
+            if (chevron) {
+                chevron.classList.toggle('rotate-180', serviceTripsState.showPast);
+            }
+            if (btn) {
+                btn.classList.toggle('border-indigo-500/40', serviceTripsState.showPast);
+                btn.classList.toggle('text-indigo-400', serviceTripsState.showPast);
+            }
+            renderServiceTripsSection();
+        };
+
+        window.openServiceTripModal = function(editTripId = '') {
+            updateScheduleOperatorsDatalist();
+            const modal = document.getElementById('serviceTripModal');
+            const titleEl = document.getElementById('serviceTripModalTitle');
+            const idInput = document.getElementById('tripEditIdInput');
+            const opInput = document.getElementById('tripOperatorInput');
+            const startInput = document.getElementById('tripStartInput');
+            const endInput = document.getElementById('tripEndInput');
+            const statusSelect = document.getElementById('tripStatusSelect');
+            const notesInput = document.getElementById('tripNotesInput');
+
+            const pad = n => String(n).padStart(2, '0');
+            const baseDate = escalaState.selectedDate || new Date();
+            const defaultDateStr = `${baseDate.getFullYear()}-${pad(baseDate.getMonth() + 1)}-${pad(baseDate.getDate())}`;
+
+            if (editTripId) {
+                const found = serviceTripsState.trips.find(t => t.id === editTripId);
+                if (!found) return;
+                titleEl.textContent = 'Editar Viagem a Serviço';
+                idInput.value = found.id;
+                opInput.value = found.operatorName || '';
+                startInput.value = found.startDate || defaultDateStr;
+                endInput.value = found.endDate || defaultDateStr;
+                statusSelect.value = found.statusMode || 'auto';
+                notesInput.value = found.notes || '';
+            } else {
+                titleEl.textContent = 'Informar Viagem a Serviço';
+                idInput.value = '';
+                opInput.value = '';
+                startInput.value = defaultDateStr;
+                endInput.value = defaultDateStr;
+                statusSelect.value = 'auto';
+                notesInput.value = '';
+            }
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            setTimeout(() => opInput.focus(), 50);
+        };
+
+        window.closeServiceTripModal = function() {
+            const modal = document.getElementById('serviceTripModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            document.getElementById('serviceTripForm').reset();
+        };
+
+        async function syncTripToFirebase(trip) {
+            try {
+                await setDoc(doc(dbNovo, `artifacts/${firebaseConfigNovo.projectId}/service_trips`, trip.id), trip);
+            } catch (e) {}
+        }
+
+        async function deleteTripFromFirebase(tripId) {
+            try {
+                await deleteDoc(doc(dbNovo, `artifacts/${firebaseConfigNovo.projectId}/service_trips`, tripId));
+            } catch (e) {}
+        }
+
+        window.saveServiceTrip = function(e) {
+            e.preventDefault();
+            const editId = document.getElementById('tripEditIdInput').value.trim();
+            const operatorName = document.getElementById('tripOperatorInput').value.trim().toUpperCase();
+            const startDate = document.getElementById('tripStartInput').value;
+            const endDate = document.getElementById('tripEndInput').value;
+            const statusMode = document.getElementById('tripStatusSelect').value;
+            const notes = document.getElementById('tripNotesInput').value.trim();
+
+            if (!operatorName || !startDate || !endDate) return;
+            if (endDate < startDate) {
+                alert('A data de fim da viagem não pode ser anterior à data de início.');
+                return;
+            }
+
+            const tripObj = {
+                id: editId || ('trip_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)),
+                operatorName,
+                startDate,
+                endDate,
+                statusMode,
+                notes,
+                updatedAt: Date.now()
+            };
+
+            const existingIdx = serviceTripsState.trips.findIndex(t => t.id === tripObj.id);
+            if (existingIdx >= 0) {
+                serviceTripsState.trips[existingIdx] = tripObj;
+            } else {
+                serviceTripsState.trips.push(tripObj);
+            }
+
+            serviceTripsState.deletedIds.delete(tripObj.id);
+            persistServiceTripsLocally();
+            renderServiceTripsSection();
+            window.closeServiceTripModal();
+            syncTripToFirebase(tripObj);
+        };
+
+        window.cycleServiceTripStatus = function(tripId) {
+            const trip = serviceTripsState.trips.find(t => t.id === tripId);
+            if (!trip) return;
+            const order = ['auto', 'proximo', 'em_viagem', 'retornando'];
+            const curIdx = order.indexOf(trip.statusMode || 'auto');
+            trip.statusMode = order[(curIdx + 1) % order.length];
+            trip.updatedAt = Date.now();
+            persistServiceTripsLocally();
+            renderServiceTripsSection();
+            syncTripToFirebase(trip);
+        };
+
+        window.deleteServiceTrip = function(tripId) {
+            const trip = serviceTripsState.trips.find(t => t.id === tripId);
+            if (!trip) return;
+            if (!confirm(`Remover a viagem a serviço de ${trip.operatorName}?`)) return;
+            serviceTripsState.trips = serviceTripsState.trips.filter(t => t.id !== tripId);
+            serviceTripsState.deletedIds.add(tripId);
+            persistServiceTripsLocally();
+            renderServiceTripsSection();
+            deleteTripFromFirebase(tripId);
+        };
+
+        function subscribeServiceTripsFromFirebase() {
+            try {
+                onSnapshot(collection(dbNovo, `artifacts/${firebaseConfigNovo.projectId}/service_trips`), (snap) => {
+                    const remoteMap = new Map();
+                    snap.forEach(docSnap => {
+                        const data = docSnap.data();
+                        if (data && !serviceTripsState.deletedIds.has(docSnap.id)) {
+                            remoteMap.set(docSnap.id, { id: docSnap.id, ...data });
+                        }
+                    });
+
+                    // Mescla registros locais e remotos preservando a versão mais recente
+                    serviceTripsState.trips.forEach(localTrip => {
+                        if (serviceTripsState.deletedIds.has(localTrip.id)) return;
+                        const rem = remoteMap.get(localTrip.id);
+                        if (!rem || (localTrip.updatedAt || 0) > (rem.updatedAt || 0)) {
+                            remoteMap.set(localTrip.id, localTrip);
+                        }
+                    });
+
+                    serviceTripsState.trips = Array.from(remoteMap.values());
+                    persistServiceTripsLocally();
+                    renderServiceTripsSection();
+                }, () => {
+                    renderServiceTripsSection();
+                });
+            } catch (e) {
+                renderServiceTripsSection();
+            }
+        }
+
+        // =========================================================================
+        // 2.6 CONTROLE DE CMA (HABILITAÇÃO / INSPEÇÃO DE SAÚDE — CICLO 90 / 60 / 30 DIAS)
+        // =========================================================================
+        const CMA_STORAGE_KEY = 'portal_gerente_cma_records';
+        const CMA_DELETED_KEY = 'portal_gerente_cma_deleted';
+
+        const cmaState = {
+            records: (() => {
+                try {
+                    return JSON.parse(localStorage.getItem(CMA_STORAGE_KEY) || '[]');
+                } catch (e) {
+                    return [];
+                }
+            })(),
+            deletedIds: (() => {
+                try {
+                    return new Set(JSON.parse(localStorage.getItem(CMA_DELETED_KEY) || '[]'));
+                } catch (e) {
+                    return new Set();
+                }
+            })(),
+            showFullList: false
+        };
+
+        function persistCmaLocally() {
+            try {
+                localStorage.setItem(CMA_STORAGE_KEY, JSON.stringify(cmaState.records));
+                localStorage.setItem(CMA_DELETED_KEY, JSON.stringify(Array.from(cmaState.deletedIds)));
+            } catch (e) {}
+        }
+
+        function getCycleLabel(cycleMonths) {
+            const m = Number(cycleMonths) || 12;
+            if (m === 6) return 'Semestral (6m)';
+            if (m === 24) return 'Bianual (2a)';
+            return 'Anual (1a)';
+        }
+
+        function hasOperatorHadIsShiftInSchedule(operatorName) {
+            const schedule = escalaState.currentSchedule;
+            if (!schedule || !Array.isArray(schedule.scheduleData) || !Array.isArray(schedule.dateHeaders)) return false;
+            const op = schedule.scheduleData.find(o => (o.name || '').trim().toUpperCase() === (operatorName || '').trim().toUpperCase());
+            if (!op || !Array.isArray(op.shifts)) return false;
+            const dayStatuses = getDayStatusArray(schedule.dateHeaders);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            for (let i = 0; i < op.shifts.length; i++) {
+                const s = (op.shifts[i] || '').trim().toUpperCase();
+                if (s === 'IS') {
+                    const colDate = getColumnDateObject(schedule, i, dayStatuses);
+                    if (colDate <= today) return true;
+                }
+            }
+            return false;
+        }
+
+        function getCmaAlertMeta(record, nowDate = new Date()) {
+            const today = new Date(nowDate);
+            today.setHours(0, 0, 0, 0);
+            const expDt = parseIsoDateLocal(record.expiryDate);
+            const stage = record.workflowStage || 'regular';
+            const cycleLabel = getCycleLabel(record.cycleMonths);
+
+            if (!expDt) {
+                return {
+                    tier: 'missing_date',
+                    daysLeft: -9999,
+                    needsAttention: true,
+                    needsDateRenewal: true,
+                    badgeLabel: '⚠️ DEFINIR VALIDADE CMA',
+                    actionHint: 'Clique em Renovar/Editar para inserir a data de validade da CMA',
+                    badgeClass: 'bg-amber-500/20 text-amber-400 border-amber-500/40 animate-pulse',
+                    borderClass: 'border-l-amber-500',
+                    cycleLabel,
+                    sortPriority: 0
+                };
+            }
+
+            const daysLeft = Math.round((expDt - today) / 86400000);
+            const hadIsShift = hasOperatorHadIsShiftInSchedule(record.operatorName);
+
+            // Se foi marcado como "Inspeção Realizada — aguardando nova data", ou se já venceu (daysLeft <= 0), ou se fez IS na escala e está nos últimos 45 dias
+            if (stage === 'aguardando_data' || daysLeft <= 0 || (hadIsShift && daysLeft <= 45)) {
+                const vencTxt = daysLeft < 0 ? `Vencida há ${Math.abs(daysLeft)}d` : (daysLeft === 0 ? 'Vence HOJE' : `Vence em ${daysLeft}d`);
+                return {
+                    tier: 'pending_new_date',
+                    daysLeft,
+                    needsAttention: true,
+                    needsDateRenewal: true,
+                    badgeLabel: `🔄 ATUALIZAR NOVA DATA CMA (${vencTxt})`,
+                    actionHint: 'Inspeção concluída / ciclo encerrado — clique em "Renovar Ciclo" para gravar a nova validade futura!',
+                    badgeClass: 'bg-rose-500/25 text-rose-300 border-rose-500/50 animate-pulse',
+                    borderClass: 'border-l-rose-500',
+                    cycleLabel,
+                    sortPriority: 0
+                };
+            }
+
+            if (daysLeft <= 30) {
+                return {
+                    tier: '30d',
+                    daysLeft,
+                    needsAttention: true,
+                    needsDateRenewal: false,
+                    badgeLabel: `🚨 ALERTA 30 DIAS • Faltam ${daysLeft}d`,
+                    actionHint: stage === 'tratativa'
+                        ? 'Em tratativa / viagem agendada — lembre-se de atualizar a nova data após a inspeção'
+                        : 'Reta final (< 30 dias) — priorizar inspeção de saúde e conclusão das tratativas!',
+                    badgeClass: 'bg-rose-500/25 text-rose-400 border-rose-500/50 animate-pulse',
+                    borderClass: 'border-l-rose-500',
+                    cycleLabel,
+                    sortPriority: 1
+                };
+            }
+
+            if (daysLeft <= 60) {
+                return {
+                    tier: '60d',
+                    daysLeft,
+                    needsAttention: true,
+                    needsDateRenewal: false,
+                    badgeLabel: `⚠️ ALERTA 60 DIAS • Faltam ${daysLeft}d`,
+                    actionHint: stage === 'tratativa'
+                        ? 'Em tratativa — após a inspeção, clique em "Renovar Ciclo" para lançar a nova validade'
+                        : 'Faixa de 60 dias — providenciar viagem a serviço e protocolos da inspeção de saúde',
+                    badgeClass: 'bg-orange-500/20 text-orange-400 border-orange-500/45',
+                    borderClass: 'border-l-orange-500',
+                    cycleLabel,
+                    sortPriority: 2
+                };
+            }
+
+            if (daysLeft <= 90) {
+                return {
+                    tier: '90d',
+                    daysLeft,
+                    needsAttention: true,
+                    needsDateRenewal: false,
+                    badgeLabel: `⚠️ ALERTA 90 DIAS • Faltam ${daysLeft}d`,
+                    actionHint: stage === 'tratativa'
+                        ? 'Tratativas já iniciadas — acompanhando agendamento da inspeção'
+                        : 'Faixa de 90 dias — iniciar tratativas, agendamento e protocolos para renovação da CMA',
+                    badgeClass: 'bg-amber-500/15 text-amber-400 border-amber-500/35',
+                    borderClass: 'border-l-amber-500',
+                    cycleLabel,
+                    sortPriority: 3
+                };
+            }
+
+            if (stage === 'tratativa') {
+                return {
+                    tier: 'tratativa',
+                    daysLeft,
+                    needsAttention: true,
+                    needsDateRenewal: false,
+                    badgeLabel: `📋 EM TRATATIVA • Faltam ${daysLeft}d`,
+                    actionHint: 'Tratativas em andamento — clique em "Renovar Ciclo" assim que sair a nova validade',
+                    badgeClass: 'bg-sky-500/15 text-sky-400 border-sky-500/35',
+                    borderClass: 'border-l-sky-500',
+                    cycleLabel,
+                    sortPriority: 4
+                };
+            }
+
+            return {
+                tier: 'ok',
+                daysLeft,
+                needsAttention: false,
+                needsDateRenewal: false,
+                badgeLabel: `Em dia (${daysLeft}d)`,
+                actionHint: 'Dentro da validade regular (> 90 dias)',
+                badgeClass: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+                borderClass: 'border-l-emerald-500',
+                cycleLabel,
+                sortPriority: 5
+            };
+        }
+
+        function renderCmaSection() {
+            const alertsContainer = document.getElementById('cmaAlertsContainer');
+            const fullListBox = document.getElementById('cmaFullListBox');
+            const fullCollapsible = document.getElementById('cmaFullListCollapsible');
+            const totalBadge = document.getElementById('cmaTotalCountBadge');
+            const activeAlertsBadge = document.getElementById('cmaActiveAlertsBadge');
+            const pendingRenewalBadge = document.getElementById('cmaPendingRenewalBadge');
+            if (!alertsContainer || !fullListBox) return;
+
+            updateScheduleOperatorsDatalist();
+
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            const enriched = cmaState.records.map(rec => ({
+                rec,
+                meta: getCmaAlertMeta(rec, today)
+            })).sort((a, b) => {
+                if (a.meta.sortPriority !== b.meta.sortPriority) return a.meta.sortPriority - b.meta.sortPriority;
+                return a.meta.daysLeft - b.meta.daysLeft;
+            });
+
+            if (totalBadge) totalBadge.textContent = String(enriched.length);
+
+            const attentionItems = enriched.filter(item => item.meta.needsAttention);
+            const renewalPendingItems = enriched.filter(item => item.meta.needsDateRenewal);
+
+            if (activeAlertsBadge) {
+                const count90 = attentionItems.length;
+                if (count90 > 0) {
+                    activeAlertsBadge.textContent = `⚠️ ${count90} em Alerta (≤ 90d)`;
+                    activeAlertsBadge.classList.remove('hidden');
+                } else {
+                    activeAlertsBadge.classList.add('hidden');
+                }
+            }
+
+            if (pendingRenewalBadge) {
+                if (renewalPendingItems.length > 0) {
+                    pendingRenewalBadge.textContent = `🔄 ${renewalPendingItems.length} Pendente Atualizar Nova Data`;
+                    pendingRenewalBadge.classList.remove('hidden');
+                } else {
+                    pendingRenewalBadge.classList.add('hidden');
+                }
+            }
+
+            // Renderiza automaticamente apenas os operadores em janela de alerta (90d, 60d, 30d) ou pendentes de atualizar data
+            if (attentionItems.length === 0) {
+                if (enriched.length === 0) {
+                    alertsContainer.innerHTML = `
+                        <div class="sub-panel p-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+                            <span class="text-mut italic">Nenhuma CMA cadastrada ainda. Carregue os 7 operadores + você ou cadastre individualmente.</span>
+                            <button type="button" onclick="window.importOperatorsToCma()" class="px-2.5 py-1 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[11px] font-semibold hover:opacity-85 transition">
+                                <i class="fas fa-user-check mr-1"></i>Carregar Efetivo da Escala
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    alertsContainer.innerHTML = `
+                        <div class="sub-panel p-2.5 border-l-4 border-l-emerald-500 flex items-center justify-between gap-2 text-xs">
+                            <span class="text-sec"><i class="fas fa-circle-check text-emerald-400 mr-1.5"></i>Todas as <strong>${enriched.length}</strong> CMAs cadastradas estão em dia (acima de 90 dias para o vencimento).</span>
+                            <button type="button" onclick="window.toggleCmaFullList()" class="text-[11px] font-semibold text-emerald-400 hover:underline shrink-0">
+                                Ver datas
+                            </button>
+                        </div>
+                    `;
+                }
+            } else {
+                alertsContainer.innerHTML = attentionItems.map(({ rec, meta }) => {
+                    const noteTag = rec.notes
+                        ? `<span class="px-1.5 py-0.5 rounded bg-slate-500/15 text-sec border border-std text-[10px] font-medium">${rec.notes}</span>`
+                        : '';
+                    const stageBadge = rec.workflowStage === 'tratativa'
+                        ? `<span class="px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-400 border border-sky-500/30 text-[10px] font-semibold">📋 Tratativa Iniciada</span>`
+                        : '';
+
+                    // Botão de ação rápida conforme o estágio do ciclo
+                    const quickStageBtn = meta.needsDateRenewal
+                        ? `<button type="button" onclick="window.openCmaModal('${rec.id}', true)" class="h-6 px-2.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold flex items-center gap-1 transition shadow-sm" title="Inserir a nova data de validade da CMA e reiniciar o ciclo">
+                                <i class="fas fa-rotate text-[9px]"></i>
+                                <span>Renovar Nova Data (+${rec.cycleMonths || 12}m)</span>
+                           </button>`
+                        : `
+                           <button type="button" onclick="window.openServiceTripFromCma('${rec.id}')" class="h-6 px-2 rounded sub-panel hover:border-indigo-500/50 text-[10px] font-semibold text-indigo-400 flex items-center gap-1 transition" title="Abrir cadastro de Viagem a Serviço para a inspeção de saúde deste operador">
+                                <i class="fas fa-plane-departure text-[9px]"></i>
+                                <span>Viagem</span>
+                           </button>
+                           <button type="button" onclick="window.advanceCmaStage('${rec.id}')" class="h-6 px-2 rounded sub-panel hover:border-amber-500/50 text-[10px] font-semibold text-sec flex items-center gap-1 transition" title="Alternar entre: Em Tratativa / Aguardando Nova Data">
+                                <i class="fas fa-check-double text-[9px] text-amber-400"></i>
+                                <span>${rec.workflowStage === 'tratativa' ? 'Já Fez Inspeção' : 'Iniciar Tratativa'}</span>
+                           </button>
+                           <button type="button" onclick="window.openCmaModal('${rec.id}', true)" class="h-6 px-2 rounded bg-emerald-600/90 hover:bg-emerald-500 text-white text-[10px] font-bold flex items-center gap-1 transition" title="Editar a nova data de validade da CMA e reiniciar o ciclo">
+                                <i class="fas fa-calendar-check text-[9px]"></i>
+                                <span>Renovar Data</span>
+                           </button>
+                        `;
+
+                    return `
+                        <div class="sub-panel border-l-4 ${meta.borderClass} px-3.5 py-2.5 flex flex-col gap-1.5 transition">
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <span class="font-bold text-xs sm:text-sm tracking-tight px-2 py-0.5 rounded border border-std" style="background-color: var(--bg-surface);">
+                                        ${rec.operatorName}
+                                    </span>
+                                    <span class="px-1.5 py-0.5 rounded sub-panel text-[10px] font-mono text-sec" title="Periodicidade do ciclo CMA">
+                                        ${meta.cycleLabel}
+                                    </span>
+                                    <span class="text-[11px] font-mono text-sec">
+                                        Validade: <strong>${formatDateBr(rec.expiryDate)}</strong>
+                                    </span>
+                                    ${stageBadge}
+                                    ${noteTag}
+                                </div>
+
+                                <span class="px-2 py-0.5 rounded border text-[11px] font-bold font-mono ${meta.badgeClass}">
+                                    ${meta.badgeLabel}
+                                </span>
+                            </div>
+
+                            <div class="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-std/60">
+                                <span class="text-[11px] text-sec">
+                                    <i class="fas fa-bell text-[10px] text-amber-400 mr-1"></i>${meta.actionHint}
+                                </span>
+                                <div class="flex flex-wrap items-center gap-1.5">
+                                    ${quickStageBtn}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            // Renderiza o Quadro Geral Expansível (todos os operadores cadastrados)
+            if (enriched.length === 0) {
+                fullListBox.innerHTML = `<div class="text-center text-xs text-mut italic py-2">Nenhum operador cadastrado no controle de CMA.</div>`;
+            } else {
+                fullListBox.innerHTML = enriched.map(({ rec, meta }) => {
+                    const noteText = rec.notes ? ` • <span class="text-sec">${rec.notes}</span>` : '';
+                    return `
+                        <div class="sub-panel border-l-4 ${meta.borderClass} px-3 py-2 flex flex-wrap items-center justify-between gap-2 transition">
+                            <div class="flex flex-wrap items-center gap-2 text-xs">
+                                <span class="font-bold text-xs px-2 py-0.5 rounded border border-std" style="background-color: var(--bg-surface);">
+                                    ${rec.operatorName}
+                                </span>
+                                <span class="px-1.5 py-0.5 rounded bg-slate-500/15 text-sec border border-std text-[10px] font-mono">
+                                    ${meta.cycleLabel}
+                                </span>
+                                <span class="font-mono text-[11px] text-sec">
+                                    Validade: <strong>${formatDateBr(rec.expiryDate)}</strong>${noteText}
+                                </span>
+                            </div>
+
+                            <div class="flex items-center gap-1.5">
+                                <span class="px-2 py-0.5 rounded border text-[10px] font-mono font-bold ${meta.badgeClass}">
+                                    ${meta.badgeLabel}
+                                </span>
+                                <button type="button" onclick="window.openCmaModal('${rec.id}', true)" class="h-6 px-2 rounded bg-emerald-600/20 hover:bg-emerald-600/35 text-emerald-400 border border-emerald-500/30 text-[10px] font-semibold flex items-center gap-1 transition" title="Renovar ou editar validade da CMA">
+                                    <i class="fas fa-rotate text-[9px]"></i>
+                                    <span>Renovar / Editar</span>
+                                </button>
+                                <button type="button" onclick="window.deleteCmaRecord('${rec.id}')" class="w-6 h-6 rounded sub-panel flex items-center justify-center text-mut hover:text-rose-400 transition" title="Remover registro CMA">
+                                    <i class="fas fa-trash-can text-[10px]"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            if (fullCollapsible) {
+                fullCollapsible.classList.toggle('hidden', !cmaState.showFullList);
+            }
+        }
+
+        window.toggleCmaFullList = function() {
+            cmaState.showFullList = !cmaState.showFullList;
+            const chevron = document.getElementById('iconChevronCmaList');
+            const btn = document.getElementById('btnToggleCmaList');
+            if (chevron) chevron.classList.toggle('rotate-180', cmaState.showFullList);
+            if (btn) {
+                btn.classList.toggle('border-emerald-500/40', cmaState.showFullList);
+                btn.classList.toggle('text-emerald-400', cmaState.showFullList);
+            }
+            renderCmaSection();
+        };
+
+        window.applyCmaCycleProjection = function(monthsToAdd) {
+            const expiryInput = document.getElementById('cmaExpiryInput');
+            const cycleSelect = document.getElementById('cmaCycleSelect');
+            if (!expiryInput) return;
+
+            if (cycleSelect && (monthsToAdd === 6 || monthsToAdd === 12 || monthsToAdd === 24)) {
+                cycleSelect.value = String(monthsToAdd);
+            }
+
+            const curDate = parseIsoDateLocal(expiryInput.value);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            // Se a data atual do campo já for futura ou recente, soma a partir dela; caso contrário, soma a partir de hoje
+            const baseDate = (curDate && curDate >= today) ? new Date(curDate) : new Date(today);
+            baseDate.setMonth(baseDate.getMonth() + Number(monthsToAdd));
+
+            const pad = n => String(n).padStart(2, '0');
+            expiryInput.value = `${baseDate.getFullYear()}-${pad(baseDate.getMonth() + 1)}-${pad(baseDate.getDate())}`;
+
+            const stageSelect = document.getElementById('cmaStageSelect');
+            if (stageSelect) stageSelect.value = 'regular';
+        };
+
+        window.updateCmaQuickRenewalHint = function() {
+            // Mantém sincronizado o seletor de ciclo
+        };
+
+        window.openCmaModal = function(editId = '', isRenewalMode = false) {
+            updateScheduleOperatorsDatalist();
+            const modal = document.getElementById('cmaModal');
+            const titleEl = document.getElementById('cmaModalTitle');
+            const idInput = document.getElementById('cmaEditIdInput');
+            const opInput = document.getElementById('cmaOperatorInput');
+            const cycleSelect = document.getElementById('cmaCycleSelect');
+            const expiryInput = document.getElementById('cmaExpiryInput');
+            const stageSelect = document.getElementById('cmaStageSelect');
+            const notesInput = document.getElementById('cmaNotesInput');
+
+            const pad = n => String(n).padStart(2, '0');
+            const today = new Date();
+
+            if (editId) {
+                const found = cmaState.records.find(r => r.id === editId);
+                if (!found) return;
+                titleEl.textContent = isRenewalMode ? `Renovar / Atualizar CMA — ${found.operatorName}` : `Editar CMA — ${found.operatorName}`;
+                idInput.value = found.id;
+                opInput.value = found.operatorName || '';
+                cycleSelect.value = String(found.cycleMonths || 12);
+                expiryInput.value = found.expiryDate || `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+                stageSelect.value = isRenewalMode ? 'regular' : (found.workflowStage || 'regular');
+                notesInput.value = found.notes || '';
+            } else {
+                titleEl.textContent = 'Informar / Cadastrar CMA';
+                idInput.value = '';
+                opInput.value = '';
+                cycleSelect.value = '12';
+                const nextYear = new Date(today.getFullYear() + 1, today.getMonth(), today.getDate());
+                expiryInput.value = `${nextYear.getFullYear()}-${pad(nextYear.getMonth() + 1)}-${pad(nextYear.getDate())}`;
+                stageSelect.value = 'regular';
+                notesInput.value = '';
+            }
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            setTimeout(() => (editId ? expiryInput : opInput).focus(), 50);
+        };
+
+        window.closeCmaModal = function() {
+            const modal = document.getElementById('cmaModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            document.getElementById('cmaForm').reset();
+        };
+
+        async function syncCmaToFirebase(record) {
+            try {
+                await setDoc(doc(dbNovo, `artifacts/${firebaseConfigNovo.projectId}/cma_records`, record.id), record);
+            } catch (e) {}
+        }
+
+        async function deleteCmaFromFirebase(recordId) {
+            try {
+                await deleteDoc(doc(dbNovo, `artifacts/${firebaseConfigNovo.projectId}/cma_records`, recordId));
+            } catch (e) {}
+        }
+
+        window.saveCmaRecord = function(e) {
+            e.preventDefault();
+            const editId = document.getElementById('cmaEditIdInput').value.trim();
+            const operatorName = document.getElementById('cmaOperatorInput').value.trim().toUpperCase();
+            const cycleMonths = parseInt(document.getElementById('cmaCycleSelect').value, 10) || 12;
+            const expiryDate = document.getElementById('cmaExpiryInput').value;
+            const workflowStage = document.getElementById('cmaStageSelect').value;
+            const notes = document.getElementById('cmaNotesInput').value.trim();
+
+            if (!operatorName || !expiryDate) return;
+
+            // Se já existir registro com o mesmo nome de operador quando estiver criando um novo, atualiza o existente
+            const existingByName = !editId
+                ? cmaState.records.find(r => (r.operatorName || '').toUpperCase() === operatorName)
+                : null;
+
+            const targetId = editId || (existingByName ? existingByName.id : ('cma_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)));
+
+            const recordObj = {
+                id: targetId,
+                operatorName,
+                cycleMonths,
+                expiryDate,
+                workflowStage,
+                notes,
+                updatedAt: Date.now()
+            };
+
+            const idx = cmaState.records.findIndex(r => r.id === targetId);
+            if (idx >= 0) {
+                cmaState.records[idx] = recordObj;
+            } else {
+                cmaState.records.push(recordObj);
+            }
+
+            cmaState.deletedIds.delete(targetId);
+            persistCmaLocally();
+            renderCmaSection();
+            window.closeCmaModal();
+            syncCmaToFirebase(recordObj);
+        };
+
+        window.advanceCmaStage = function(recordId) {
+            const rec = cmaState.records.find(r => r.id === recordId);
+            if (!rec) return;
+            if (rec.workflowStage === 'tratativa') {
+                rec.workflowStage = 'aguardando_data';
+            } else if (rec.workflowStage === 'aguardando_data') {
+                rec.workflowStage = 'regular';
+            } else {
+                rec.workflowStage = 'tratativa';
+            }
+            rec.updatedAt = Date.now();
+            persistCmaLocally();
+            renderCmaSection();
+            syncCmaToFirebase(rec);
+        };
+
+        window.openServiceTripFromCma = function(recordId) {
+            const rec = cmaState.records.find(r => r.id === recordId);
+            if (!rec) return;
+            window.openServiceTripModal();
+            const opInput = document.getElementById('tripOperatorInput');
+            const notesInput = document.getElementById('tripNotesInput');
+            if (opInput) opInput.value = rec.operatorName;
+            if (notesInput) notesInput.value = 'Inspeção de Saúde (Renovação CMA)';
+        };
+
+        window.importOperatorsToCma = function() {
+            const schedule = escalaState.currentSchedule;
+            const namesToImport = new Set(['WILKSON']);
+            if (schedule && Array.isArray(schedule.scheduleData)) {
+                schedule.scheduleData.forEach(op => {
+                    if (op.name && op.name.trim()) namesToImport.add(op.name.trim().toUpperCase());
+                });
+            }
+
+            let addedCount = 0;
+            namesToImport.forEach(name => {
+                const exists = cmaState.records.some(r => (r.operatorName || '').toUpperCase() === name);
+                if (!exists) {
+                    const newRec = {
+                        id: 'cma_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6) + '_' + addedCount,
+                        operatorName: name,
+                        cycleMonths: 12,
+                        expiryDate: '',
+                        workflowStage: 'aguardando_data',
+                        notes: '',
+                        updatedAt: Date.now()
+                    };
+                    cmaState.records.push(newRec);
+                    syncCmaToFirebase(newRec);
+                    addedCount++;
+                }
+            });
+
+            cmaState.showFullList = true;
+            persistCmaLocally();
+            renderCmaSection();
+        };
+
+        window.deleteCmaRecord = function(recordId) {
+            const rec = cmaState.records.find(r => r.id === recordId);
+            if (!rec) return;
+            if (!confirm(`Remover o controle de CMA de ${rec.operatorName}?`)) return;
+            cmaState.records = cmaState.records.filter(r => r.id !== recordId);
+            cmaState.deletedIds.add(recordId);
+            persistCmaLocally();
+            renderCmaSection();
+            deleteCmaFromFirebase(recordId);
+        };
+
+        function subscribeCmaFromFirebase() {
+            try {
+                onSnapshot(collection(dbNovo, `artifacts/${firebaseConfigNovo.projectId}/cma_records`), (snap) => {
+                    const remoteMap = new Map();
+                    snap.forEach(docSnap => {
+                        const data = docSnap.data();
+                        if (data && !cmaState.deletedIds.has(docSnap.id)) {
+                            remoteMap.set(docSnap.id, { id: docSnap.id, ...data });
+                        }
+                    });
+
+                    cmaState.records.forEach(localRec => {
+                        if (cmaState.deletedIds.has(localRec.id)) return;
+                        const rem = remoteMap.get(localRec.id);
+                        if (!rem || (localRec.updatedAt || 0) > (rem.updatedAt || 0)) {
+                            remoteMap.set(localRec.id, localRec);
+                        }
+                    });
+
+                    cmaState.records = Array.from(remoteMap.values());
+                    persistCmaLocally();
+                    renderCmaSection();
+                }, () => {
+                    renderCmaSection();
+                });
+            } catch (e) {
+                renderCmaSection();
             }
         }
 
@@ -1582,6 +2993,9 @@
                 recebimento: m.recebimento
             }));
 
+            const histCountBadge = document.getElementById('metarHistoryCountBadge');
+            if (histCountBadge) histCountBadge.textContent = String(metarState.historicoMetar.length);
+
             const histEl = document.getElementById('historyContainer');
             histEl.innerHTML = metarState.historicoMetar.map(item => `
                 <div class="py-1.5 border-b border-std last:border-0 flex items-center justify-between gap-4">
@@ -1590,6 +3004,22 @@
                 </div>
             `).join('');
         }
+
+        window.toggleMetarSection = function(section) {
+            const isOptions = section === 'options';
+            const panelEl = document.getElementById(isOptions ? 'metarOptionsCollapsible' : 'metarHistoryCollapsible');
+            const chevronEl = document.getElementById(isOptions ? 'iconChevronMetarOptions' : 'iconChevronMetarHistory');
+            const btnEl = document.getElementById(isOptions ? 'btnToggleMetarOptions' : 'btnToggleMetarHistory');
+            if (!panelEl) return;
+
+            const willOpen = panelEl.classList.contains('hidden');
+            panelEl.classList.toggle('hidden', !willOpen);
+            if (chevronEl) chevronEl.classList.toggle('rotate-180', willOpen);
+            if (btnEl) {
+                btnEl.classList.toggle('border-sky-500/40', willOpen);
+                btnEl.classList.toggle('text-sky-400', willOpen);
+            }
+        };
 
         function verificarHoraCheia() {
             const agora = new Date();
@@ -2836,6 +4266,8 @@
                 document.getElementById('aerodromoInput').value = icao;
                 document.getElementById('metarHeaderTitle').textContent = `METAR / SPECI — ${icao}`;
                 document.getElementById('headerTitle').textContent = `PORTAL GERENTE DNIZ • ${icao}`;
+                const quickBadge = document.getElementById('metarIcaoQuickBadge');
+                if (quickBadge) quickBadge.textContent = icao;
             }
 
             document.getElementById('silenceButton').addEventListener('click', silenciarAlarme);
@@ -2863,6 +4295,8 @@
                 localStorage.setItem('aerodromo', v);
                 document.getElementById('metarHeaderTitle').textContent = `METAR / SPECI — ${v}`;
                 document.getElementById('headerTitle').textContent = `PORTAL GERENTE DNIZ • ${v}`;
+                const quickBadge = document.getElementById('metarIcaoQuickBadge');
+                if (quickBadge) quickBadge.textContent = v;
                 metarState.metarHoraAtualEncontrado = false;
                 desativarAlerta();
                 window.consultarMetar();
@@ -2914,6 +4348,10 @@
 
             loadAllSchedulesFromFirebase();
             subscribeAlteracaoHorarioRequests();
+            renderServiceTripsSection();
+            subscribeServiceTripsFromFirebase();
+            renderCmaSection();
+            subscribeCmaFromFirebase();
             renderHubCategories();
             renderHubSystems();
         }
